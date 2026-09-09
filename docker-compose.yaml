@@ -1,0 +1,63 @@
+services:
+  genomelens-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    image: jacobhadley/genomelens-app:0.1.2
+    platform: linux/amd64
+    pull_policy: if_not_present
+    ports:
+    - 3000:3000
+    x-kubernetes:
+      annotations:
+        maayanlab.cloud/ingress: ${PROD_NEXT_PUBLIC_URL}
+    environment:
+    - DATABASE_URL=${PROD_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD}@genomelens-postgres:5432/postgres}
+    - ADMIN_PASSWORD
+    - ADMIN_SESSION_SECRET
+    - OPENAI_API_KEY
+    - RCLONE_CONFIG_MAAYANLAB_TYPE=s3
+    - RCLONE_CONFIG_MAAYANLAB_PROVIDER
+    - RCLONE_CONFIG_MAAYANLAB_ACCESS_KEY_ID
+    - RCLONE_CONFIG_MAAYANLAB_SECRET_ACCESS_KEY
+    - RCLONE_CONFIG_MAAYANLAB_ENDPOINT
+    - RCLONE_CONFIG_MAAYANLAB_ACL
+
+  genomelens-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: jacobhadley/genomelens-worker:0.1.4
+    platform: linux/amd64
+    pull_policy: if_not_present
+    environment:
+    - DATABASE_URL=${PROD_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD}@genomelens-postgres:5432/postgres}
+    - OPENAI_API_KEY
+    - RCLONE_CONFIG_MAAYANLAB_TYPE=s3
+    - RCLONE_CONFIG_MAAYANLAB_PROVIDER
+    - RCLONE_CONFIG_MAAYANLAB_ACCESS_KEY_ID
+    - RCLONE_CONFIG_MAAYANLAB_SECRET_ACCESS_KEY
+    - RCLONE_CONFIG_MAAYANLAB_ENDPOINT
+    - RCLONE_CONFIG_MAAYANLAB_ACL
+
+  genomelens-postgres:
+    image: postgres:17
+    pull_policy: missing
+    restart: unless-stopped
+    environment:
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+    - 5432:5432
+    volumes:
+    - genomelens-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  genomelens-postgres-data:
+    x-kubernetes:
+      size: 10Gi
+      class: ceph-block-no-replicas
+
+x-kubernetes:
+  context: jacobhadley@sshkube
+  name: genomelens
+  namespace: jacobhadley

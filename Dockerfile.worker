@@ -1,0 +1,16 @@
+FROM python:3.12-alpine
+RUN apk add --no-cache nodejs npm uv rclone ffmpeg
+WORKDIR /app
+ADD requirements.txt .
+RUN uv venv --python /usr/local/bin/python3.12 && uv pip install -r requirements.txt
+ADD package-lock.json .
+ADD graphile.config.js .
+ADD package.json .
+ADD jsconfig.json .
+ADD kysely.config.js .
+ADD migrations ./migrations
+RUN npm i
+ADD src ./src
+ENV PYTHON_BIN=/app/.venv/bin/python
+ENV PYTHON_ROOT=/app
+CMD [ "npm", "run", "worker" ]
