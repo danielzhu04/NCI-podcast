@@ -63,20 +63,34 @@ export default function EpisodeCard({ episode, index }) {
           <p className="font-body text-sm text-graphite/50 leading-relaxed line-clamp-2">
             {episode.paper_title}
           </p>
+          {(episode.journal || (episode.nci_grants && episode.nci_grants.length > 0)) && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {episode.journal && (
+                <span className="px-2 py-1 rounded-full border border-graphite/10 font-mono text-[10px] tracking-wider uppercase text-graphite/40">
+                  {episode.journal}
+                </span>
+              )}
+              {(episode.nci_grants || []).slice(0, 2).map((grant) => (
+                <span key={grant} className="px-2 py-1 rounded-full border border-cobalt/15 font-mono text-[10px] tracking-wider uppercase text-cobalt/80">
+                  {grant}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </Link>
 
       {/* Quick links */}
       <div className="flex items-center gap-4 mt-4">
-        {episode.tool_url && (
+        {(episode.outputs?.[0]?.url || episode.tool_url) && (
           <a
-            href={episode.tool_url}
+            href={episode.outputs?.[0]?.url || episode.tool_url}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-wider uppercase text-cobalt hover:text-cobalt/70 transition-colors focus:outline-none focus:ring-2 focus:ring-cobalt focus:ring-offset-2 rounded"
             onClick={(e) => e.stopPropagation()}
           >
-            <ExternalLink className="w-3 h-3" /> Tool
+            <ExternalLink className="w-3 h-3" /> {episode.outputs?.[0]?.type || "Tool"}
           </a>
         )}
         {episode.publication_url && (

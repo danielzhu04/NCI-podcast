@@ -15,6 +15,12 @@ export default function Admin() {
     tool_url: "",
     image_url: "",
   });
+  const [paperMeta, setPaperMeta] = useState(null);
+  const [candidates, setCandidates] = useState([]);
+  const [candidateMeta, setCandidateMeta] = useState(null);
+  const [candidateStatus, setCandidateStatus] = useState("idle");
+  const [candidateError, setCandidateError] = useState("");
+  const [windowDays, setWindowDays] = useState("90d");
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
@@ -35,27 +41,83 @@ export default function Admin() {
   async function fetchPending() {
     try {
       const episodes = await episodeAPI.list();
-      
-      console.log("ALL EPISODES:", episodes);
-
       const unpublished = episodes.filter(
         (ep) => ep.published === false
       );
-
-      console.log("UNPUBLISHED:", unpublished);
-
       setPendingEpisodes(unpublished);
     } catch (err) {
       console.error("fetchPending failed:", err);
     }
   }
 
+  async function fetchCandidates() {
+    setCandidateStatus("loading");
+    setCandidateError("");
+    try {
+      const res = await fetch(`/api/papers/candidates?window=${encodeURIComponent(windowDays)}&limit=10`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load candidates");
+      }
+      setCandidates(data.candidates || []);
+      setCandidateMeta({
+        queried: data.queried,
+        kept: data.kept,
+        window: data.window,
+        attention_source: data.attention_source,
+      });
+      setCandidateStatus("ready");
+    } catch (err) {
+      console.error(err);
+      setCandidateError(err.message || "Failed to load candidates");
+      setCandidateStatus("error");
+    }
+  }
+
   useEffect(() => {
-    if (authenticated) fetchPending();
+    if (authenticated) {
+      fetchPending();
+      fetchCandidates();
+    }
   }, [authenticated]);
 
   function handleChange(field) {
     return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  }
+
+  async function usePaper(candidate) {
+    setPaperMeta(candidate);
+    setForm({
+      publication_url: candidate.publication_url || candidate.pubmed_url || "",
+      tool_url: candidate.tool_url || "",
+      image_url: candidate.image_url || "",
+    });
+    setMessage("");
+
+    if (!candidate.oa_pdf_url) {
+      setStatus("idle");
+      return;
+    }
+
+    setStatus("submitting");
+    setMessage("Trying to fetch an open-access PDF…");
+    try {
+      const res = await fetch(`/api/papers/oa-pdf?url=${encodeURIComponent(candidate.oa_pdf_url)}`);
+      if (!res.ok) {
+        throw new Error("Open-access PDF was not available");
+      }
+      const blob = await res.blob();
+      const file = new File([blob], `${candidate.pmid || "paper"}.pdf`, { type: "application/pdf" });
+      setPdfFile(file);
+      setStatus("success");
+      setMessage("Open-access PDF attached. You can still replace it with a manual upload.");
+    } catch {
+      setPdfFile(null);
+      setStatus("idle");
+      setMessage("No open-access PDF. Upload the paper PDF below.");
+    }
   }
 
   async function handleSubmit() {
@@ -73,6 +135,12 @@ export default function Admin() {
     formData.append("publication_url", form.publication_url);
     formData.append("tool_url", form.tool_url);
     formData.append("image_url", form.image_url);
+    formData.append("pmid", paperMeta?.pmid || "");
+    formData.append("doi", paperMeta?.doi || "");
+    formData.append("journal", paperMeta?.journal || "");
+    formData.append("nci_grants", JSON.stringify(paperMeta?.nci_grants || []));
+    formData.append("impact", JSON.stringify(paperMeta?.impact || {}));
+    formData.append("outputs", JSON.stringify(paperMeta?.outputs || []));
 
     try {
       const res = await fetch("/api/podcasts/generate", {
@@ -90,6 +158,7 @@ export default function Admin() {
       setStatus("success");
       setMessage(`Queued. Job id: ${data.job_id}`);
       setPdfFile(null);
+      setPaperMeta(null);
       setForm({ publication_url: "", tool_url: "", image_url: "" });
     } catch (e) {
       setStatus("error");
@@ -135,7 +204,7 @@ export default function Admin() {
           <ArrowLeft className="w-3 h-3" /> Home
         </Link>
         <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-graphite/30">
-          Genome Lens
+          NCI Signal
         </p>
       </div>
 
@@ -152,7 +221,73 @@ export default function Admin() {
           </h1>
         </motion.div>
 
+        <div className="mb-16 space-y-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="font-mono text-[11px] tracking-[0.4em] uppercase text-cobalt mb-2">
+                Candidates
+              </p>
+              <p className="font-body text-sm text-graphite/50 max-w-lg">
+                NCI-supported papers from PubMed. Recent papers are ranked by attention (Altmetric if a key is set); older papers still use iCite RCR.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={windowDays}
+                onChange={(e) => setWindowDays(e.target.value)}
+                className="font-mono text-xs uppercase tracking-widest bg-transparent border-b border-graphite/15 py-2 outline-none"
+              >
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+                <option value="180d">Last 180 days</option>
+              </select>
+              <button
+                onClick={fetchCandidates}
+                disabled={candidateStatus === "loading"}
+                className="font-mono text-xs uppercase tracking-widest text-graphite/50 hover:text-cobalt transition-colors disabled:opacity-50"
+              >
+                {candidateStatus === "loading" ? "Finding…" : "Refresh"}
+              </button>
+            </div>
+          </div>
+
+          {candidateMeta && (
+            <p className="font-mono text-[11px] text-graphite/35">
+              Window {candidateMeta.window} · queried {candidateMeta.queried} · kept {candidateMeta.kept}
+              {candidateMeta.attention_source ? ` · scoring ${candidateMeta.attention_source}` : ""}
+            </p>
+          )}
+          {candidateError && <p className="font-mono text-xs text-red-500">{candidateError}</p>}
+          {candidateStatus === "loading" && (
+            <p className="font-mono text-xs text-graphite/40">Searching PubMed, iCite, and attention scores…</p>
+          )}
+          {candidateStatus === "ready" && candidates.length === 0 && (
+            <p className="font-mono text-xs text-graphite/40">No unused high-impact NCI papers in this window.</p>
+          )}
+
+          <div className="space-y-4">
+            {candidates.map((candidate) => (
+              <CandidateCard
+                key={candidate.pmid}
+                candidate={candidate}
+                selected={paperMeta?.pmid === candidate.pmid}
+                onUse={() => usePaper(candidate)}
+              />
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-8">
+          {paperMeta && (
+            <div className="border border-cobalt/20 bg-cobalt/5 rounded p-4 space-y-2">
+              <p className="font-mono text-[11px] tracking-widest uppercase text-cobalt">Selected paper</p>
+              <p className="font-body text-sm text-graphite">{paperMeta.title}</p>
+              <p className="font-mono text-[11px] text-graphite/40">
+                {paperMeta.journal} · PMID {paperMeta.pmid}
+              </p>
+            </div>
+          )}
+
           <Field label="Upload Paper PDF">
             <input
               type="file"
@@ -160,6 +295,12 @@ export default function Admin() {
               onChange={(e) => setPdfFile(e.target.files[0])}
               className="w-full font-body text-sm text-graphite"
             />
+            {pdfFile && (
+              <p className="font-mono text-[11px] text-graphite/40">{pdfFile.name}</p>
+            )}
+            <p className="font-mono text-[10px] tracking-wide uppercase text-graphite/30">
+              Flagship-journal PDFs are often paywalled. Manual upload is the fallback.
+            </p>
           </Field>
 
           <Field label="Publication URL">
@@ -249,10 +390,87 @@ function Field({ label, children }) {
   );
 }
 
+function CandidateCard({ candidate, selected, onUse }) {
+  return (
+    <div className={`border rounded p-4 space-y-3 ${selected ? "border-cobalt" : "border-graphite/15"}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[10px] tracking-widest uppercase text-cobalt">
+          {candidate.lane === "rcr" ? "Citation lane" : "Attention lane"}
+        </span>
+        {candidate.journal && (
+          <span className="font-mono text-[10px] tracking-widest uppercase text-graphite/40">
+            {candidate.journal}
+          </span>
+        )}
+        {candidate.pub_date && (
+          <span className="font-mono text-[10px] text-graphite/35">{candidate.pub_date}</span>
+        )}
+      </div>
+      <p className="font-body text-sm text-graphite leading-snug">{candidate.title}</p>
+      <div className="flex flex-wrap gap-2">
+        {(candidate.nci_grants || []).slice(0, 3).map((grant) => (
+          <span key={grant} className="px-2 py-1 rounded-full border border-graphite/10 font-mono text-[10px] tracking-wider uppercase text-graphite/45">
+            {grant}
+          </span>
+        ))}
+        {(candidate.outputs || []).map((output) => (
+          <span key={`${output.type}-${output.id}`} className="px-2 py-1 rounded-full border border-mint/20 font-mono text-[10px] tracking-wider uppercase text-mint">
+            {output.type}
+          </span>
+        ))}
+        {typeof candidate.attention_score === "number" && candidate.attention_score > 0 && (
+          <span className="font-mono text-[10px] text-graphite/35">
+            {candidate.attention_source === "altmetric" ? "Altmetric" : "Attention"} {Number(candidate.attention_score).toFixed(1)}
+          </span>
+        )}
+        {typeof candidate.rcr === "number" && (
+          <span className="font-mono text-[10px] text-graphite/35">RCR {candidate.rcr.toFixed(2)}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <button
+          onClick={onUse}
+          className="font-mono text-xs uppercase tracking-widest bg-cobalt text-alabaster px-4 py-2 rounded hover:opacity-90 transition-opacity"
+        >
+          Use this paper
+        </button>
+        <a
+          href={candidate.pubmed_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-[11px] uppercase tracking-widest text-graphite/45 hover:text-cobalt"
+        >
+          PubMed
+        </a>
+        {candidate.doi && (
+          <a
+            href={`https://doi.org/${candidate.doi}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-[11px] uppercase tracking-widest text-graphite/45 hover:text-cobalt"
+          >
+            DOI
+          </a>
+        )}
+        {candidate.altmetric?.details_url && (
+          <a
+            href={candidate.altmetric.details_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-[11px] uppercase tracking-widest text-graphite/45 hover:text-cobalt"
+          >
+            Altmetric
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PendingEpisodeCard({ episode, onPublished }) {
   const [title, setTitle] = useState(episode.title);
   const [description, setDescription] = useState(episode.description);
-  const [tags, setTags] = useState(episode.tags.join(", "));
+  const [tags, setTags] = useState((episode.tags || []).join(", "));
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
 

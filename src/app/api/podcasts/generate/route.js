@@ -25,11 +25,27 @@ export async function POST(request) {
   const arrayBuffer = await pdfFile.arrayBuffer()
   const pdf_base64 = Buffer.from(arrayBuffer).toString('base64')
 
+  function parseJsonField(value, fallback) {
+    if (!value) return fallback
+    if (typeof value !== "string") return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return fallback
+    }
+  }
+
   const body = {
     pdf_base64,
-    publication_url: formData.get('publication_url'),
-    tool_url: formData.get('tool_url'),
-    image_url: formData.get('image_url'),
+    publication_url: formData.get('publication_url') || "",
+    tool_url: formData.get('tool_url') || "",
+    image_url: formData.get('image_url') || "",
+    pmid: formData.get('pmid') || "",
+    doi: formData.get('doi') || "",
+    journal: formData.get('journal') || "",
+    nci_grants: parseJsonField(formData.get('nci_grants'), []),
+    impact: parseJsonField(formData.get('impact'), {}),
+    outputs: parseJsonField(formData.get('outputs'), []),
   }
 
   try {

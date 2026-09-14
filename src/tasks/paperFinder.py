@@ -1,0 +1,595 @@
+"""Find high-impact NCI-supported papers for NCI Signal.
+
+Lane A: recent papers ranked by attention (Altmetric, with citation fallback).
+Lane B: older NCI-supported papers with iCite RCR >= 2.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import date, datetime
+from typing import Any
+
+EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+ICITE_URL = "https://icite.od.nih.gov/api/pubs"
+OPENALEX_URL = "https://api.openalex.org/works"
+MANIFEST_URL = (
+    "https://s3.k8s.maayanlab.cloud/axiom-podcasts/nci-signal/manifest.json"
+)
+
+NCBI_TOOL = os.getenv("NCBI_TOOL", "nci-signal")
+NCBI_EMAIL = os.getenv("NCBI_EMAIL", "nci-signal@example.org")
+NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")
+ALTMETRIC_API_KEY = os.getenv("ALTMETRIC_API_KEY", "")
+ALTMETRIC_URL = "https://api.altmetric.com/v1"
+
+JOURNAL_WHITELIST = {
+    "nature": "Nature",
+    "science": "Science",
+    "cell": "Cell",
+    "cancer cell": "Cancer Cell",
+    "nature cancer": "Nature Cancer",
+    "nat cancer": "Nature Cancer",
+    "nature medicine": "Nature Medicine",
+    "nat med": "Nature Medicine",
+    "nature genetics": "Nature Genetics",
+    "nat genet": "Nature Genetics",
+    "cancer discovery": "Cancer Discovery",
+    "cancer discov": "Cancer Discovery",
+}
+
+JOURNAL_QUERY = (
+    '"Nature"[ta] OR "Science"[ta] OR "Cell"[ta] OR "Cancer Cell"[ta] '
+    'OR "Nat Cancer"[ta] OR "Nat Med"[ta] OR "Nat Genet"[ta] OR "Cancer Discov"[ta]'
+)
+
+GRANT_CORE_RE = re.compile(r"(?:(\d))?([A-Z]\d{2})([A-Z]{2})(\d{6})")
+GRANT_CA_RE = re.compile(r"(?:[A-Z]\d{2})?CA\d{6}")
+
+OUTPUT_PATTERNS = [
+    (re.compile(r"\b(GSE\d+)\b", re.I), "geo", "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={id}"),
+    (re.compile(r"\b(GDS\d+)\b", re.I), "geo", "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={id}"),
+    (re.compile(r"\b(SR[PRX]\d+)\b", re.I), "sra", "https://www.ncbi.nlm.nih.gov/sra/?term={id}"),
+    (re.compile(r"\b(phs\d+)\b", re.I), "dbgap", "https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id={id}"),
+    (re.compile(r"(github\.com/[\w.\-]+/[\w.\-]+)", re.I), "github", "https://{id}"),
+    (re.compile(r"(10\.5281/zenodo\.\d+)", re.I), "zenodo", "https://doi.org/{id}"),
+]
+
+RCR_THRESHOLD = 2.0
+RECENT_DAYS = 365
+ALTMETRIC_PAUSE_S = 0.2 if ALTMETRIC_API_KEY else 0.35
+
+
+def _http_get(url: str, timeout: int = 30) -> bytes:
+    # Fetch raw bytes from a URL. Shared by PubMed, iCite, OpenAlex, and the S3 manifest.
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": f"{NCBI_TOOL} (mailto:{NCBI_EMAIL})",
+            "Accept": "*/*",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def _http_get_json(url: str, timeout: int = 30) -> Any:
+    # Same as _http_get, but parse JSON. Used by iCite, OpenAlex, PubMed esearch, and the manifest.
+    return json.loads(_http_get(url, timeout=timeout).decode("utf-8"))
+
+
+def _ncbi_params(extra: dict[str, Any]) -> str:
+    # Build an NCBI query string with tool/email/api key. Required on every E-utilities request.
+    params = {
+        "tool": NCBI_TOOL,
+        "email": NCBI_EMAIL,
+        **extra,
+    }
+    if NCBI_API_KEY:
+        params["api_key"] = NCBI_API_KEY
+    return urllib.parse.urlencode(params)
+
+
+def _ncbi_pause() -> None:
+    # Sleep between NCBI calls so we stay under the public rate limit.
+    time.sleep(0.12 if NCBI_API_KEY else 0.34)
+
+
+def parse_window(window: str | None) -> int:
+    # Turn "90d" into a day count for PubMed's date filter.
+    raw = (window or "90d").strip().lower()
+    match = re.fullmatch(r"(\d+)d", raw)
+    if match:
+        return max(7, min(int(match.group(1)), 3650))
+    return 90
+
+
+def normalize_grant(grant_id: str) -> str | None:
+    # Clean a messy grant string to a core ID like U24CA264250. Used on Admin cards and episode metadata.
+    cleaned = re.sub(r"[\s\-]", "", (grant_id or "").upper())
+    if not cleaned:
+        return None
+    match = GRANT_CORE_RE.search(cleaned)
+    if match:
+        return f"{match.group(2)}{match.group(3)}{match.group(4)}"
+    if GRANT_CA_RE.search(cleaned):
+        return cleaned
+    return cleaned
+
+
+def is_nci_grant(grant: dict[str, str]) -> bool:
+    # True if one PubMed grant record is NCI (CA code, NCI agency, or CA in the ID).
+    acronym = (grant.get("acronym") or "").upper()
+    agency = (grant.get("agency") or "").upper()
+    gid = re.sub(r"[\s\-]", "", (grant.get("grant_id") or "").upper())
+    if acronym == "CA":
+        return True
+    if "NCI" in agency:
+        return True
+    if GRANT_CA_RE.search(gid):
+        return True
+    return False
+
+
+def match_journal(title: str, iso: str) -> str | None:
+    # Map a journal name onto the flagship whitelist. Used to enlarge the pool, not as a quality gate.
+    for value in (title, iso):
+        key = re.sub(r"\s+", " ", (value or "").strip().lower())
+        if key in JOURNAL_WHITELIST:
+            return JOURNAL_WHITELIST[key]
+    return None
+
+
+def parse_pub_date(year: str, month: str, day: str, medline_date: str | None) -> date | None:
+    # Parse PubMed's messy date fields. Age decides recent (use journal) vs older (use Relative Citation Ratio).
+    if year and year.isdigit():
+        month_raw = (month or "1").strip()
+        try:
+            month_num = datetime.strptime(month_raw[:3], "%b").month
+        except ValueError:
+            try:
+                month_num = int(month_raw)
+            except ValueError:
+                month_num = 1
+        try:
+            day_num = int(day) if day else 1
+            return date(int(year), month_num, max(1, min(day_num, 28)))
+        except ValueError:
+            return None
+    if medline_date:
+        match = re.search(r"(19|20)\d{2}", medline_date)
+        if match:
+            return date(int(match.group(0)), 1, 1)
+    return None
+
+
+def find_outputs(text: str) -> list[dict[str, str]]:
+    # Scan title/abstract for GEO, SRA, dbGaP, GitHub, Zenodo. Used to badge reusable outputs.
+    found: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for pattern, kind, url_tmpl in OUTPUT_PATTERNS:
+        for match in pattern.finditer(text or ""):
+            raw_id = match.group(1)
+            key = (kind, raw_id.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append({
+                "type": kind,
+                "id": raw_id,
+                "url": url_tmpl.format(id=raw_id),
+            })
+    return found
+
+
+def pubmed_search(term: str, retmax: int = 100) -> list[str]:
+    # PubMed ESearch: return PMIDs for a query. First discovery step for both lanes.
+    url = f"{EUTILS}/esearch.fcgi?{_ncbi_params({'db': 'pubmed', 'term': term, 'retmax': retmax, 'retmode': 'json', 'sort': 'pub+date'})}"
+    payload = _http_get_json(url)
+    _ncbi_pause()
+    return payload.get("esearchresult", {}).get("idlist", []) or []
+
+
+def pubmed_efetch(pmids: list[str]) -> list[dict[str, Any]]:
+    # PubMed EFetch: turn PMID batches into article metadata (title, grants, abstract, DOI).
+    articles: list[dict[str, Any]] = []
+    for i in range(0, len(pmids), 50):
+        batch = pmids[i:i + 50]
+        url = f"{EUTILS}/efetch.fcgi?{_ncbi_params({'db': 'pubmed', 'id': ','.join(batch), 'rettype': 'xml', 'retmode': 'xml'})}"
+        xml_bytes = _http_get(url, timeout=60)
+        _ncbi_pause()
+        articles.extend(_parse_pubmed_xml(xml_bytes))
+    return articles
+
+
+def _text(node: ET.Element | None) -> str:
+    # Safe XML node → string. Used while walking PubMed EFetch XML.
+    if node is None:
+        return ""
+    return "".join(node.itertext()).strip()
+
+
+def _parse_pubmed_xml(xml_bytes: bytes) -> list[dict[str, Any]]:
+    # Convert PubMed XML into paper dicts the scorer and Admin payload can use.
+    root = ET.fromstring(xml_bytes)
+    papers: list[dict[str, Any]] = []
+    for article in root.findall(".//PubmedArticle"):
+        pmid = _text(article.find("./MedlineCitation/PMID"))
+        art = article.find("./MedlineCitation/Article")
+        if art is None or not pmid:
+            continue
+
+        journal_title = _text(art.find("./Journal/Title"))
+        journal_iso = _text(art.find("./Journal/ISOAbbreviation"))
+        pubdate = art.find("./Journal/JournalIssue/PubDate")
+        year = _text(pubdate.find("Year")) if pubdate is not None else ""
+        month = _text(pubdate.find("Month")) if pubdate is not None else ""
+        day = _text(pubdate.find("Day")) if pubdate is not None else ""
+        medline = _text(pubdate.find("MedlineDate")) if pubdate is not None else ""
+        published = parse_pub_date(year, month, day, medline)
+
+        doi = ""
+        for eloc in art.findall("./ELocationID"):
+            if (eloc.get("EIdType") or "").lower() == "doi":
+                doi = _text(eloc)
+                break
+        if not doi:
+            for aid in article.findall("./PubmedData/ArticleIdList/ArticleId"):
+                if (aid.get("IdType") or "").lower() == "doi":
+                    doi = _text(aid)
+                    break
+
+        pmcid = ""
+        for aid in article.findall("./PubmedData/ArticleIdList/ArticleId"):
+            if (aid.get("IdType") or "").lower() == "pmc":
+                pmcid = _text(aid)
+                break
+
+        grants = []
+        for grant in art.findall("./GrantList/Grant"):
+            grants.append({
+                "grant_id": _text(grant.find("GrantID")),
+                "acronym": _text(grant.find("Acronym")),
+                "agency": _text(grant.find("Agency")),
+            })
+
+        abstract_parts = [_text(node) for node in art.findall("./Abstract/AbstractText")]
+        abstract = " ".join(part for part in abstract_parts if part)
+
+        papers.append({
+            "pmid": pmid,
+            "title": _text(art.find("ArticleTitle")),
+            "abstract": abstract,
+            "journal_title": journal_title,
+            "journal_iso": journal_iso,
+            "journal": match_journal(journal_title, journal_iso) or journal_iso or journal_title,
+            "pub_date": published.isoformat() if published else None,
+            "age_days": (date.today() - published).days if published else None,
+            "doi": doi,
+            "pmcid": pmcid,
+            "grants": grants,
+        })
+    return papers
+
+
+def icite_enrich(pmids: list[str]) -> dict[str, dict[str, Any]]:
+    # Batch-fetch NIH iCite RCR/citations. Lane B keeps older papers with RCR >= 2.
+    out: dict[str, dict[str, Any]] = {}
+    if not pmids:
+        return out
+    for i in range(0, len(pmids), 200):
+        batch = pmids[i:i + 200]
+        query = urllib.parse.urlencode({
+            "pmids": ",".join(batch),
+            "fl": "pmid,relative_citation_ratio,nih_percentile,citation_count,year",
+        })
+        try:
+            payload = _http_get_json(f"{ICITE_URL}?{query}", timeout=45)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            continue
+        for row in payload.get("data", []) or []:
+            pmid = str(row.get("pmid") or "")
+            if pmid:
+                out[pmid] = row
+    return out
+
+
+def openalex_enrich(papers: list[dict[str, Any]]) -> None:
+    # Add OpenAlex citation counts and OA PDF URLs so Admin can try auto-attaching a PDF.
+    dois = [p["doi"] for p in papers if p.get("doi")]
+    by_doi: dict[str, dict[str, Any]] = {}
+    for i in range(0, len(dois), 25):
+        batch = dois[i:i + 25]
+        query = urllib.parse.urlencode({
+            "filter": f"doi:{'|'.join(batch)}",
+            "per-page": 25,
+            "select": "doi,cited_by_count,open_access,primary_location,best_oa_location",
+            "mailto": NCBI_EMAIL,
+        })
+        try:
+            payload = _http_get_json(f"{OPENALEX_URL}?{query}", timeout=30)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            continue
+        for work in payload.get("results", []) or []:
+            doi = (work.get("doi") or "").replace("https://doi.org/", "").lower()
+            if doi:
+                by_doi[doi] = work
+
+    for paper in papers:
+        work = by_doi.get((paper.get("doi") or "").lower())
+        if not work:
+            continue
+        paper["citation_count"] = work.get("cited_by_count")
+        oa = work.get("best_oa_location") or {}
+        open_access = work.get("open_access") or {}
+        paper["oa_pdf_url"] = oa.get("pdf_url") or open_access.get("oa_url")
+        paper["image_url"] = paper.get("image_url") or ""
+
+
+def _altmetric_get(path: str) -> dict[str, Any] | None:
+    # One Altmetric Details Page lookup. 404 = no mentions; 403 = key required/denied.
+    url = f"{ALTMETRIC_URL}/{path}"
+    if ALTMETRIC_API_KEY:
+        url += ("&" if "?" in url else "?") + urllib.parse.urlencode({"key": ALTMETRIC_API_KEY})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": f"{NCBI_TOOL} (mailto:{NCBI_EMAIL})",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        if err.code in {403, 404, 429}:
+            return {"_status": err.code}
+        return None
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def altmetric_enrich(papers: list[dict[str, Any]]) -> str:
+    # Pull Altmetric Attention Scores for cutting-edge ranking. Returns the source actually used.
+    got_any = False
+    blocked = False
+    for paper in papers:
+        payload = None
+        doi = paper.get("doi") or ""
+        if doi:
+            payload = _altmetric_get("doi/" + urllib.parse.quote(doi, safe=""))
+            time.sleep(ALTMETRIC_PAUSE_S)
+        if (not payload or payload.get("_status") == 404) and paper.get("pmid"):
+            payload = _altmetric_get("pmid/" + paper["pmid"])
+            time.sleep(ALTMETRIC_PAUSE_S)
+        status = (payload or {}).get("_status")
+        if status == 403:
+            blocked = True
+            paper["attention_score"] = 0.0
+            paper["altmetric"] = None
+            continue
+        if not payload or status:
+            paper["attention_score"] = 0.0
+            paper["altmetric"] = None
+            continue
+        score = payload.get("score")
+        paper["attention_score"] = float(score) if isinstance(score, (int, float)) else 0.0
+        paper["altmetric"] = {
+            "score": paper["attention_score"],
+            "news": payload.get("cited_by_msm_count") or 0,
+            "posts": payload.get("cited_by_posts_count") or payload.get("cited_by_tweeters_count") or 0,
+            "details_url": payload.get("details_url") or "",
+        }
+        if paper["attention_score"] > 0:
+            got_any = True
+
+    if got_any:
+        for paper in papers:
+            paper["attention_source"] = "altmetric" if paper.get("altmetric") else "none"
+        return "altmetric"
+
+    # No Altmetric access (missing key / 403) or no scored papers: use citations as a weak proxy.
+    for paper in papers:
+        cites = paper.get("icite_citations") or paper.get("citation_count") or 0
+        try:
+            paper["attention_score"] = float(cites)
+        except (TypeError, ValueError):
+            paper["attention_score"] = 0.0
+        paper["attention_source"] = "citations"
+        paper["altmetric"] = None
+    return "citations" if not blocked else "unavailable"
+
+
+def existing_pmids() -> set[str]:
+    # PMIDs already in the episode catalog. Drops papers we have already podcasted.
+    try:
+        payload = _http_get_json(f"{MANIFEST_URL}?t={int(time.time())}", timeout=15)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return set()
+    if not isinstance(payload, list):
+        return set()
+    found = set()
+    for episode in payload:
+        pmid = str(episode.get("pmid") or "").strip()
+        if pmid:
+            found.add(pmid)
+    return found
+
+
+def _nci_grants(paper: dict[str, Any]) -> list[str]:
+    # Unique CA grant IDs from a paper. Shown on Admin cards and stored on episodes.
+    grants = []
+    seen = set()
+    for grant in paper.get("grants") or []:
+        if not is_nci_grant(grant):
+            continue
+        normalized = normalize_grant(grant.get("grant_id") or "")
+        if not normalized or normalized in seen:
+            continue
+        if not GRANT_CA_RE.search(re.sub(r"[\s\-]", "", normalized)):
+            continue
+        seen.add(normalized)
+        grants.append(normalized)
+    return grants
+
+
+def _is_nci_paper(paper: dict[str, Any]) -> bool:
+    # Paper-level NCI check. Drops PubMed hits that are not actually NCI-supported.
+    return any(is_nci_grant(grant) for grant in paper.get("grants") or [])
+
+
+def _score(paper: dict[str, Any]) -> float:
+    # Rank a paper by attention first, then RCR and shared outputs. Journal is a tiny bonus, not a gate.
+    score = 0.0
+    attention = paper.get("attention_score")
+    if isinstance(attention, (int, float)):
+        score += min(float(attention), 250.0) * 2.0
+    rcr = paper.get("rcr")
+    if isinstance(rcr, (int, float)):
+        score += min(float(rcr), 10.0) * 4
+    score += 15 * len(paper.get("outputs") or [])
+    if paper.get("whitelist_journal"):
+        score += 8
+    return score
+
+
+def _to_candidate(paper: dict[str, Any]) -> dict[str, Any]:
+    # Shape a scored paper into the JSON the Admin API returns.
+    outputs = paper.get("outputs") or []
+    tool = next((item["url"] for item in outputs if item["type"] in {"github", "zenodo"}), "")
+    doi = paper.get("doi") or ""
+    pmid = paper["pmid"]
+    publication_url = f"https://doi.org/{doi}" if doi else f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+    oa_pdf_url = paper.get("oa_pdf_url") or ""
+    if not oa_pdf_url and paper.get("pmcid"):
+        pmcid = paper["pmcid"] if str(paper["pmcid"]).upper().startswith("PMC") else f"PMC{paper['pmcid']}"
+        oa_pdf_url = f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/pdf/"
+
+    rcr = paper.get("rcr")
+    attention = paper.get("attention_score")
+    source = paper.get("attention_source") or "none"
+    if paper.get("lane") == "attention":
+        if source == "altmetric" and isinstance(attention, (int, float)):
+            reason = f"Altmetric {attention:.1f}"
+        elif source == "citations" and isinstance(attention, (int, float)):
+            reason = f"citation proxy {int(attention)}"
+        else:
+            reason = "recent attention"
+    elif isinstance(rcr, (int, float)):
+        reason = f"iCite RCR {rcr:.2f}"
+    else:
+        reason = "citation impact"
+    return {
+        "pmid": pmid,
+        "doi": doi,
+        "title": paper.get("title") or "",
+        "abstract": paper.get("abstract") or "",
+        "journal": paper.get("whitelist_journal") or paper.get("journal") or "",
+        "pub_date": paper.get("pub_date"),
+        "age_days": paper.get("age_days"),
+        "nci_grants": paper.get("nci_grants") or [],
+        "lane": paper.get("lane"),
+        "rcr": rcr,
+        "attention_score": attention if isinstance(attention, (int, float)) else 0,
+        "attention_source": source,
+        "altmetric": paper.get("altmetric"),
+        "citation_count": paper.get("citation_count") or paper.get("icite_citations"),
+        "impact": {
+            "lane": paper.get("lane"),
+            "rcr": rcr,
+            "attention_score": attention if isinstance(attention, (int, float)) else None,
+            "reason": reason,
+        },
+        "outputs": outputs,
+        "publication_url": publication_url,
+        "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+        "tool_url": tool,
+        "image_url": paper.get("image_url") or "",
+        "oa_pdf_url": oa_pdf_url,
+        "score": round(_score(paper), 2),
+    }
+
+
+def find_candidates(window: str = "90d", limit: int = 10) -> dict[str, Any]:
+    # Orchestrate search → NCI filter → attention/RCR lanes → rank. Called by GET /api/papers/candidates.
+    days = parse_window(window)
+    used = existing_pmids()
+
+    recent_term = (
+        f"(CA[gr] OR NCI[gr]) AND (\"last {days} days\"[PDat]) "
+        f"AND english[la] AND journal article[pt]"
+    )
+    flagship_term = (
+        f"(CA[gr] OR NCI[gr]) AND ({JOURNAL_QUERY}) "
+        f'AND ("last {days} days"[PDat]) AND english[la] AND journal article[pt]'
+    )
+    recent_ids = [pmid for pmid in pubmed_search(recent_term, retmax=120) if pmid not in used]
+    flagship_ids = [pmid for pmid in pubmed_search(flagship_term, retmax=80) if pmid not in used]
+
+    lane_b_ids: list[str] = []
+    if len(recent_ids) + len(flagship_ids) < 8:
+        lane_b_term = (
+            f"(CA[gr] OR NCI[gr]) AND (\"last 5 years\"[PDat]) "
+            f"AND english[la] AND journal article[pt]"
+        )
+        lane_b_ids = [
+            pmid for pmid in pubmed_search(lane_b_term, retmax=150)
+            if pmid not in used and pmid not in recent_ids and pmid not in flagship_ids
+        ]
+
+    all_ids = list(dict.fromkeys(recent_ids + flagship_ids + lane_b_ids))
+    papers = pubmed_efetch(all_ids)
+    papers = [paper for paper in papers if _is_nci_paper(paper) and paper["pmid"] not in used]
+
+    icite = icite_enrich([paper["pmid"] for paper in papers])
+    for paper in papers:
+        row = icite.get(paper["pmid"]) or {}
+        rcr = row.get("relative_citation_ratio")
+        paper["rcr"] = float(rcr) if isinstance(rcr, (int, float)) else None
+        paper["icite_citations"] = row.get("citation_count")
+        paper["nci_grants"] = _nci_grants(paper)
+        paper["whitelist_journal"] = match_journal(paper.get("journal_title") or "", paper.get("journal_iso") or "")
+        paper["outputs"] = find_outputs(" ".join([
+            paper.get("title") or "",
+            paper.get("abstract") or "",
+        ]))
+
+    attention_source = altmetric_enrich(papers)
+
+    for paper in papers:
+        age = paper.get("age_days")
+        recent = age is not None and age <= RECENT_DAYS
+        if recent or age is None:
+            paper["lane"] = "attention"
+        elif paper.get("rcr") is not None and paper["rcr"] >= RCR_THRESHOLD:
+            paper["lane"] = "rcr"
+        else:
+            paper["lane"] = None
+
+    kept = [paper for paper in papers if paper.get("lane")]
+    if not kept:
+        kept = papers
+
+    openalex_enrich(kept)
+    kept.sort(key=_score, reverse=True)
+    candidates = [_to_candidate(paper) for paper in kept[: max(1, min(int(limit or 10), 25))]]
+
+    return {
+        "window": f"{days}d",
+        "queried": len(all_ids),
+        "kept": len(kept),
+        "attention_source": attention_source,
+        "candidates": candidates,
+    }
+
+
+if __name__ == "__main__":
+    result = find_candidates(window=os.getenv("NCI_WINDOW", "90d"))
+    print(json.dumps(result, indent=2))

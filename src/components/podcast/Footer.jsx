@@ -21,13 +21,13 @@ export default function Footer() {
           <div className="space-y-5">
             <img
               src="https://s3.k8s.maayanlab.cloud/axiom-podcasts/logo.png?v=2"
-              alt="Ma'ayan Laboratory"
+              alt="NCI Signal"
               className="h-20 w-auto"
             />
 
-            <h3 className="font-heading text-2xl font-semibold text-white">Genome Lens</h3>
+            <h3 className="font-heading text-2xl font-semibold text-white">NCI Signal</h3>
             <p className="font-body text-sm text-white/50 leading-relaxed max-w-xs">
-              AI-generated podcast episodes from the Ma'ayan Laboratory at the Icahn School of Medicine at Mount Sinai. Translating bioinformatics research into accessible dialogue.
+              Each episode unpacks a high-impact paper supported by the National Cancer Institute — and the data, code, and tools that paper left behind. Built by the Ma'ayan Laboratory.
             </p>
             <div className="flex items-center gap-1">
               <span className="font-mono text-[10px] tracking-widest uppercase text-white/30">
@@ -106,8 +106,8 @@ export default function Footer() {
           <p className="font-mono text-[10px] tracking-widest uppercase text-white/20">
             © {new Date().getFullYear()} Ma'ayan Laboratory · Mount Sinai
           </p>
-          <p className="font-mono text-[10px] tracking-widest uppercase text-white/20">
-            Powered by Artificial Intelligence
+          <p className="font-mono text-[10px] tracking-widest uppercase text-white/20 max-w-xl text-center md:text-right">
+            Grant tagging is incomplete. Episode selection is editorial.
           </p>
         </div>
       </div>

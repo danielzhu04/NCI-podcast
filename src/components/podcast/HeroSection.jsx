@@ -29,8 +29,8 @@ export default function HeroSection({ latestEpisode }) {
       {/* Header bar */}
       <div className="relative z-10 flex items-center justify-between px-6 md:px-16 py-6">
         <div>
-          <h2 className="font-mono text-xs tracking-[0.3em] uppercase text-graphite/60">Ma'ayan Laboratory</h2>
-          <h1 className="font-heading text-lg md:text-xl font-semibold text-graphite tracking-tight">Genome Lens</h1>
+          <h2 className="font-mono text-xs tracking-[0.3em] uppercase text-graphite/60">NCI-Supported Research</h2>
+          <h1 className="font-heading text-lg md:text-xl font-semibold text-graphite tracking-tight">NCI Signal</h1>
     	</div>
         <div className="flex items-center gap-6">
           <Link
@@ -71,7 +71,7 @@ export default function HeroSection({ latestEpisode }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.2, delay: 0.15, ease }}
           >
-            Where Biology Meets Artificial Intelligence
+            High-Impact NCI-Supported Cancer Research
           </motion.h2>
           <motion.p
             className="text-base md:text-lg text-graphite/60 leading-relaxed max-w-md"
@@ -79,7 +79,7 @@ export default function HeroSection({ latestEpisode }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.3, ease }}
           >
-            AI-generated podcast episodes from the Ma'ayan Lab. Two AI researchers — Axiom and Trinity — decode published papers into accessible, synthesized conversations.
+            Two AI hosts — Axiom and Trinity — decode high-impact papers supported by the National Cancer Institute, including the data, code, and tools those papers left behind.
           </motion.p>
           {latestEpisode && (
             <motion.div
@@ -115,7 +115,7 @@ export default function HeroSection({ latestEpisode }) {
             {[...Array(6)].map((_, i) => (
               <span key={i} className="font-mono text-[11px] tracking-widest uppercase text-graphite/30">
                 <span className="text-cobalt/50">●</span>{" "}
-                Genome Lens: EP.{String(latestEpisode.episode_number || 1).padStart(3, "0")} — {latestEpisode.paper_title}
+                NCI Signal: EP.{String(latestEpisode.episode_number || 1).padStart(3, "0")} — {latestEpisode.paper_title}
                 {" "}<span className="text-mint/50">◆</span>{" "}
                 Hosted by {latestEpisode.hosts || "Axiom & Trinity"}
               </span>

@@ -52,7 +52,7 @@ export default function EpisodeDetail() {
           <ArrowLeft className="w-3 h-3" /> Archive
         </Link>
         <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-graphite/30">
-          Genome Lens
+          NCI Signal
         </p>
       </div>
 
@@ -131,14 +131,14 @@ export default function EpisodeDetail() {
           transition={{ duration: 0.8, delay: 0.4, ease }}
           className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4"
         >
-          {episode.tool_url ? (
-            <a href={episode.tool_url} target="_blank" rel="noopener noreferrer"
+          {(episode.outputs?.length || episode.tool_url) ? (
+            <a href={(episode.outputs?.[0]?.url) || episode.tool_url} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-3 px-6 py-5 bg-cobalt text-white rounded-xl font-mono text-xs tracking-widest uppercase hover:bg-cobalt/90 transition-colors">
-              <ExternalLink className="w-4 h-4" /> Open Tool
+              <ExternalLink className="w-4 h-4" /> {episode.outputs?.[0] ? `Open ${episode.outputs[0].type}` : "Open Tool"}
             </a>
           ) : (
             <div className="flex items-center justify-center gap-3 px-6 py-5 bg-graphite/5 text-graphite/30 rounded-xl font-mono text-xs tracking-widest uppercase cursor-not-allowed">
-              <ExternalLink className="w-4 h-4" /> No Tool
+              <ExternalLink className="w-4 h-4" /> No Outputs
             </div>
           )}
           {episode.publication_url ? (
@@ -162,6 +162,70 @@ export default function EpisodeDetail() {
             </div>
           )}
         </motion.div>
+
+        {(episode.journal || episode.pmid || (episode.nci_grants && episode.nci_grants.length > 0) || episode.impact?.reason) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.45, ease }}
+            className="mt-16 space-y-4"
+          >
+            <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-graphite/30">NCI Support</p>
+            <div className="flex flex-wrap gap-2">
+              {episode.journal && (
+                <span className="px-3 py-1.5 rounded-full border border-graphite/10 font-mono text-[10px] tracking-widest uppercase text-graphite/50">
+                  {episode.journal}
+                </span>
+              )}
+              {episode.pmid && (
+                <a
+                  href={`https://pubmed.ncbi.nlm.nih.gov/${episode.pmid}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-full border border-graphite/10 font-mono text-[10px] tracking-widest uppercase text-cobalt"
+                >
+                  PMID {episode.pmid}
+                </a>
+              )}
+              {(episode.nci_grants || []).map((grant) => (
+                <span key={grant} className="px-3 py-1.5 rounded-full border border-cobalt/20 font-mono text-[10px] tracking-widest uppercase text-cobalt">
+                  {grant}
+                </span>
+              ))}
+            </div>
+            {episode.impact?.reason && (
+              <p className="font-body text-sm text-graphite/50">
+                Selected because: {episode.impact.reason}
+                {typeof episode.impact.rcr === "number" ? ` (RCR ${episode.impact.rcr.toFixed(2)})` : ""}
+              </p>
+            )}
+          </motion.div>
+        )}
+
+        {episode.outputs && episode.outputs.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.48, ease }}
+            className="mt-10 space-y-4"
+          >
+            <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-graphite/30">Reusable Outputs</p>
+            <div className="flex flex-col gap-3">
+              {episode.outputs.map((output) => (
+                <a
+                  key={`${output.type}-${output.id}`}
+                  href={output.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 font-mono text-xs tracking-widest uppercase text-cobalt hover:text-cobalt/70"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  {output.type}: {output.id}
+                </a>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {episode.description && (
           <motion.div

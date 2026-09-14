@@ -22,8 +22,8 @@ VOICE_MAP = {
         Data Scientist.
         Fast conversational pacing.
         Occasionally sarcastic.
-        Pronounce 'ChEA-KG' as 'Chee-A K G'
-        Pronounce 'Ma'ayan' as 'Mai-uhn' smoothly and quickly, without a pause between the two syllables.
+        Pronounce 'NCI' as 'N-C-I'.
+        Speak grant IDs in broken form: 'U24CA264250' as 'U-24 C-A 2-6-4-2-5-0'.
         """
     },
 
@@ -36,8 +36,8 @@ VOICE_MAP = {
         Postdoc.
         Fast conversational pacing.
         Wise and reassuring.
-        Pronounce 'ChEA-KG' as 'Chee-A K G'
-        Pronounce 'Ma'ayan' as 'Mai-uhn'
+        Pronounce 'NCI' as 'N-C-I'.
+        Speak grant IDs in broken form: 'U24CA264250' as 'U-24 C-A 2-6-4-2-5-0'.
         """
     }
 }

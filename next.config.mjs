@@ -2,7 +2,10 @@
 const nextConfig = {
   output: 'standalone',
   allowedDevOrigins: [
-    "trickily-deacon-geometry.ngrok-free.dev",
+    "*.ngrok-free.app",
+    "*.ngrok-free.dev",
+    "*.ngrok.app",
+    "*.ngrok.io",
   ],
 };
 

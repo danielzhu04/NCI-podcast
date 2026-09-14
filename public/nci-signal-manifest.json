@@ -1,0 +1,80 @@
+[
+  {
+    "id": "pmid-42242224-podcast",
+    "episode_number": 3,
+    "title": "A blood signature that flags lung cancer years early",
+    "paper_title": "Plasma signals of lung tumor promotion for molecular cancer prevention.",
+    "description": "Researchers found a 14-protein signature in blood that can signal lung cancer risk more than five years before diagnosis. The episode follows how that signal showed up in smokers and pollution-exposed people, and why it might help pick who benefits from inflammation-blocking prevention drugs.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-09-08",
+    "duration": null,
+    "recording_url": "",
+    "publication_url": "https://doi.org/10.1016/j.cell.2026.05.005",
+    "tool_url": "",
+    "image_url": "",
+    "tags": ["lung cancer", "prevention", "plasma", "inflammation"],
+    "published": true,
+    "pmid": "42242224",
+    "doi": "10.1016/j.cell.2026.05.005",
+    "journal": "Cell",
+    "nci_grants": ["F31CA295001", "U01CA164975"],
+    "impact": {
+      "lane": "journal",
+      "rcr": 2.3,
+      "reason": "Cell"
+    },
+    "outputs": []
+  },
+  {
+    "id": "pmid-42675216-podcast",
+    "episode_number": 2,
+    "title": "Adding glutamine to first-line pancreatic cancer therapy",
+    "paper_title": "L-Glutamine in combination with first-line gemcitabine and nab-paclitaxel in advanced pancreatic ductal adenocarcinoma: an open-label, single-arm, phase 1 GlutaPanc trial.",
+    "description": "A small phase 1 trial tested FDA-approved L-glutamine on top of standard gemcitabine and nab-paclitaxel in newly diagnosed advanced pancreatic cancer. Hosts unpack why a nutrient supplement would shrink tumors, what the safety data showed, and how early survival numbers compared with historical chemotherapy alone.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-09-07",
+    "duration": null,
+    "recording_url": "",
+    "publication_url": "https://doi.org/10.1038/s43018-026-01225-z",
+    "tool_url": "",
+    "image_url": "",
+    "tags": ["pancreatic cancer", "clinical trial", "metabolism", "glutamine"],
+    "published": true,
+    "pmid": "42675216",
+    "doi": "10.1038/s43018-026-01225-z",
+    "journal": "Nature Cancer",
+    "nci_grants": ["P01CA233452", "CA232859"],
+    "impact": {
+      "lane": "journal",
+      "rcr": null,
+      "reason": "Nature Cancer"
+    },
+    "outputs": []
+  },
+  {
+    "id": "pmid-42678278-podcast",
+    "episode_number": 1,
+    "title": "A tumor protein that starves the body",
+    "paper_title": "Tumor-Secreted ADAMTSL4 Activates Latent TGF\u03b21 to Drive Cancer Cachexia.",
+    "description": "Cancer cachexia is the wasting syndrome that has no approved treatment. This paper argues that a tumor-secreted protein, ADAMTSL4, turns on TGF-beta in muscle and fat, and that blocking it spared tissue in mice.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-09-06",
+    "duration": null,
+    "recording_url": "",
+    "publication_url": "https://doi.org/10.1158/2159-8290.CD-26-0045",
+    "tool_url": "",
+    "image_url": "",
+    "tags": ["cachexia", "TGF-beta", "lung cancer", "colorectal cancer"],
+    "published": false,
+    "pmid": "42678278",
+    "doi": "10.1158/2159-8290.CD-26-0045",
+    "journal": "Cancer Discovery",
+    "nci_grants": ["OT2CA278701"],
+    "impact": {
+      "lane": "journal",
+      "rcr": null,
+      "reason": "Cancer Discovery"
+    },
+    "outputs": []
+  }
+]

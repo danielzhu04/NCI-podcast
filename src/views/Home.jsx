@@ -36,7 +36,7 @@ export default function Home() {
           <p className="font-mono text-[11px] tracking-[0.4em] uppercase text-cobalt mb-3">The Archive</p>
           <h2 className="font-heading text-3xl md:text-5xl font-bold text-graphite italic">Synthesis Feed</h2>
           <p className="font-body text-base text-graphite/50 mt-4 max-w-lg">
-            Each episode dissects a paper from the Ma'ayan Lab — synthesized into dialogue by our AI hosts.
+            Each episode unpacks a high-impact paper supported by the National Cancer Institute — and the data, code, and tools that paper left behind.
           </p>
         </motion.div>
 

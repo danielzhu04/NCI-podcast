@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Genome Lens — Ma'ayan Lab Podcast",
-  description: "AI-generated podcast episodes from the Ma'ayan Lab. Axiom and Trinity decode published papers into accessible, synthesized conversations.",
+  title: "NCI Signal — High-impact NCI-supported papers",
+  description: "AI-generated podcast episodes that unpack high-impact National Cancer Institute-supported papers and the data, code, and tools they leave behind.",
   icons: {
     icon: 'https://s3.k8s.maayanlab.cloud/axiom-podcasts/favicon.png',
   },

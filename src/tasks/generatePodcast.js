@@ -8,6 +8,20 @@ const PodcastJobInput = z.object({
   publication_url: z.string(),
   tool_url: z.string(),
   image_url: z.string(),
+  pmid: z.string().optional().default(""),
+  doi: z.string().optional().default(""),
+  journal: z.string().optional().default(""),
+  nci_grants: z.array(z.string()).optional().default([]),
+  impact: z.object({
+    lane: z.string().optional().nullable(),
+    rcr: z.number().optional().nullable(),
+    reason: z.string().optional().nullable(),
+  }).optional().default({}),
+  outputs: z.array(z.object({
+    type: z.string(),
+    id: z.string(),
+    url: z.string(),
+  })).optional().default([]),
 })
 
 export async function queue_generate_podcast(props) {
@@ -60,6 +74,12 @@ export default async function generatePodcast(rawProps, helpers) {
         publication_url: props.publication_url,
         tool_url: props.tool_url,
         image_url: props.image_url,
+        pmid: props.pmid,
+        doi: props.doi,
+        journal: props.journal,
+        nci_grants: props.nci_grants,
+        impact: props.impact,
+        outputs: props.outputs,
       },
     })
 
