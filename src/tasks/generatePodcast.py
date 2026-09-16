@@ -99,11 +99,15 @@ def addEpisode(episode_entry: dict):
     saveManifest(manifest)
 
 
-def publishEpisode(episode_id: str, title: str = None, description: str = None, tags: list = None) -> dict:
-    """
-    Finds an episode by id, updates its edited title/description/tags,
-    marks it as published by changing the boolean field, and saves it to the manifest
-    """
+def updateEpisode(
+    episode_id: str,
+    title: str = None,
+    description: str = None,
+    tags: list = None,
+    image_url: str = None,
+    published: Optional[bool] = None,
+) -> dict:
+    """Update catalog fields for a published or unpublished episode."""
     manifest = loadManifest()
     matches = [x for x in manifest if x["id"] == episode_id]
     episode = matches[0] if matches else None
@@ -116,10 +120,25 @@ def publishEpisode(episode_id: str, title: str = None, description: str = None, 
         episode["description"] = description
     if tags is not None:
         episode["tags"] = tags
-    episode["published"] = True
+    if image_url is not None:
+        episode["image_url"] = image_url
+    if published is not None:
+        episode["published"] = bool(published)
 
     saveManifest(manifest)
     return episode
+
+
+def publishEpisode(episode_id: str, title: str = None, description: str = None, tags: list = None, image_url: str = None) -> dict:
+    """Save edits and mark the episode published."""
+    return updateEpisode(
+        episode_id,
+        title=title,
+        description=description,
+        tags=tags,
+        image_url=image_url,
+        published=True,
+    )
 
 
 def upload_local_episode(

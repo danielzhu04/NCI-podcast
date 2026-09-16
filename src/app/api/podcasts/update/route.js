@@ -22,13 +22,13 @@ export async function POST(request) {
   }
 
   try {
-    const episode = await python('tasks.generatePodcast.publishEpisode', {
+    const episode = await python("tasks.generatePodcast.updateEpisode", {
       kargs: [],
       kwargs: { episode_id: id, title, description, tags, image_url },
     })
     return Response.json({ success: true, episode })
   } catch (e) {
     console.error(e)
-    return Response.json({ error: "Failed to publish episode" }, { status: 500 })
+    return Response.json({ error: "Failed to update episode" }, { status: 500 })
   }
 }

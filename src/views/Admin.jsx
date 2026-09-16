@@ -10,6 +10,7 @@ const ease = [0.16, 1, 0.3, 1];
 export default function Admin() {
   const [pdfFile, setPdfFile] = useState(null);
   const [pendingEpisodes, setPendingEpisodes] = useState([]);
+  const [publishedEpisodes, setPublishedEpisodes] = useState([]);
   const [form, setForm] = useState({
     publication_url: "",
     tool_url: "",
@@ -38,15 +39,13 @@ export default function Admin() {
     else setAuthError("Wrong password");
   }
 
-  async function fetchPending() {
+  async function fetchEpisodes() {
     try {
       const episodes = await episodeAPI.list();
-      const unpublished = episodes.filter(
-        (ep) => ep.published === false
-      );
-      setPendingEpisodes(unpublished);
+      setPendingEpisodes(episodes.filter((ep) => ep.published === false));
+      setPublishedEpisodes(episodes.filter((ep) => ep.published !== false));
     } catch (err) {
-      console.error("fetchPending failed:", err);
+      console.error("fetchEpisodes failed:", err);
     }
   }
 
@@ -80,7 +79,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (authenticated) {
-      fetchPending();
+      fetchEpisodes();
       fetchCandidates();
     }
   }, [authenticated]);
@@ -359,7 +358,7 @@ export default function Admin() {
           </p>
 
           <button
-            onClick={fetchPending}
+            onClick={fetchEpisodes}
             className="font-mono text-xs uppercase tracking-widest text-graphite/50 hover:text-cobalt transition-colors"
           >
             Refresh
@@ -372,13 +371,45 @@ export default function Admin() {
           </p>
         ) : (
         pendingEpisodes.map((ep) => (
-          <PendingEpisodeCard
+          <EpisodeEditorCard
             key={ep.id}
             episode={ep}
-            onPublished={fetchPending}
+            mode="publish"
+            onSaved={fetchEpisodes}
           />
         ))
       )}
+      </div>
+
+      <div className="max-w-3xl mx-auto px-6 md:px-16 pt-8 pb-20 space-y-8">
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[11px] tracking-[0.4em] uppercase text-cobalt">
+            Published Podcasts ({publishedEpisodes.length})
+          </p>
+          <button
+            onClick={fetchEpisodes}
+            className="font-mono text-xs uppercase tracking-widest text-graphite/50 hover:text-cobalt transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
+        <p className="font-body text-sm text-graphite/50">
+          Edit title, description, tags, or image URL. Saving updates the public catalog without regenerating audio.
+        </p>
+        {publishedEpisodes.length === 0 ? (
+          <p className="font-mono text-xs text-graphite/40">
+            No published podcasts yet.
+          </p>
+        ) : (
+          publishedEpisodes.map((ep) => (
+            <EpisodeEditorCard
+              key={ep.id}
+              episode={ep}
+              mode="save"
+              onSaved={fetchEpisodes}
+            />
+          ))
+        )}
     </div>
 
     <Footer />
@@ -476,53 +507,62 @@ function CandidateCard({ candidate, selected, onUse }) {
   );
 }
 
-function PendingEpisodeCard({ episode, onPublished }) {
-  const [title, setTitle] = useState(episode.title);
-  const [description, setDescription] = useState(episode.description);
+function EpisodeEditorCard({ episode, mode, onSaved }) {
+  const [title, setTitle] = useState(episode.title || "");
+  const [description, setDescription] = useState(episode.description || "");
   const [tags, setTags] = useState((episode.tags || []).join(", "));
-  const [publishing, setPublishing] = useState(false);
+  const [imageUrl, setImageUrl] = useState(episode.image_url || "");
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
 
-  async function handlePublish() {
-  setPublishing(true);
-  setError("");
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    setSaved(false);
 
-  try {
-    const res = await fetch("/api/podcasts/publish", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        id: episode.id,
-        title,
-        description,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-      }),
-    });
+    try {
+      const endpoint = mode === "publish" ? "/api/podcasts/publish" : "/api/podcasts/update";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          id: episode.id,
+          title,
+          description,
+          image_url: imageUrl,
+          tags: tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to publish");
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save");
+      }
+
+      setSaved(true);
+      await onSaved();
+    } catch (e) {
+      console.error("Episode save failed:", e);
+      setError(e.message || "Failed to save");
+    } finally {
+      setSaving(false);
     }
-
-    await onPublished();
-
-  } catch (e) {
-    console.error("Publish failed:", e);
-    setError(e.message || "Failed to publish");
-  } finally {
-    setPublishing(false);
   }
-}
 
   return (
     <div className="border border-graphite/15 rounded p-4 space-y-4">
+      <p className="font-mono text-[11px] text-graphite/35">
+        {episode.journal ? `${episode.journal} · ` : ""}
+        {episode.pmid ? `PMID ${episode.pmid}` : episode.id}
+      </p>
       <Field label="Title">
         <input
           className="w-full bg-transparent border-b border-graphite/15 focus:border-cobalt outline-none py-2 font-body text-sm text-graphite"
@@ -538,6 +578,17 @@ function PendingEpisodeCard({ episode, onPublished }) {
           onChange={(e) => setDescription(e.target.value)}
         />
       </Field>
+      <Field label="Image URL">
+        <input
+          className="w-full bg-transparent border-b border-graphite/15 focus:border-cobalt outline-none py-2 font-body text-sm text-graphite"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+          placeholder="https://"
+        />
+      </Field>
+      {imageUrl ? (
+        <img src={imageUrl} alt="" className="max-h-32 rounded object-cover" />
+      ) : null}
       <Field label="Tags (comma separated)">
         <input
           className="w-full bg-transparent border-b border-graphite/15 focus:border-cobalt outline-none py-2 font-body text-sm text-graphite"
@@ -546,12 +597,17 @@ function PendingEpisodeCard({ episode, onPublished }) {
         />
       </Field>
       <button
-        onClick={handlePublish}
-        disabled={publishing}
+        onClick={handleSave}
+        disabled={saving}
         className="font-mono text-xs uppercase tracking-widest bg-cobalt text-alabaster px-6 py-3 rounded hover:opacity-90 transition-opacity disabled:opacity-50"
       >
-        {publishing ? "Publishing…" : "Publish"}
+        {saving
+          ? mode === "publish" ? "Publishing…" : "Saving…"
+          : mode === "publish" ? "Publish" : "Save changes"}
       </button>
+      {saved && mode === "save" && (
+        <p className="font-mono text-xs text-cobalt">Saved. Public pages will pick this up on refresh.</p>
+      )}
       {error && <p className="font-mono text-xs text-red-500">{error}</p>}
     </div>
   );
