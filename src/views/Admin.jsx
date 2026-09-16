@@ -20,7 +20,7 @@ export default function Admin() {
   const [candidateMeta, setCandidateMeta] = useState(null);
   const [candidateStatus, setCandidateStatus] = useState("idle");
   const [candidateError, setCandidateError] = useState("");
-  const [windowDays, setWindowDays] = useState("90d");
+  const [windowDays, setWindowDays] = useState("7d");
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
@@ -67,6 +67,8 @@ export default function Admin() {
         kept: data.kept,
         window: data.window,
         attention_source: data.attention_source,
+        trending_listed: data.trending_listed,
+        trending_hits: data.trending_hits,
       });
       setCandidateStatus("ready");
     } catch (err) {
@@ -228,7 +230,7 @@ export default function Admin() {
                 Candidates
               </p>
               <p className="font-body text-sm text-graphite/50 max-w-lg">
-                NCI-supported papers from PubMed. Recent papers are ranked by attention (Altmetric if a key is set); older papers still use iCite RCR.
+                This week's NCI-supported papers that also appear on PubMed Trending, ranked by trending order. If none overlap, the full weekly NCI list is shown.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -237,9 +239,9 @@ export default function Admin() {
                 onChange={(e) => setWindowDays(e.target.value)}
                 className="font-mono text-xs uppercase tracking-widest bg-transparent border-b border-graphite/15 py-2 outline-none"
               >
+                <option value="7d">Last 7 days</option>
+                <option value="14d">Last 14 days</option>
                 <option value="30d">Last 30 days</option>
-                <option value="90d">Last 90 days</option>
-                <option value="180d">Last 180 days</option>
               </select>
               <button
                 onClick={fetchCandidates}
@@ -254,15 +256,18 @@ export default function Admin() {
           {candidateMeta && (
             <p className="font-mono text-[11px] text-graphite/35">
               Window {candidateMeta.window} · queried {candidateMeta.queried} · kept {candidateMeta.kept}
-              {candidateMeta.attention_source ? ` · scoring ${candidateMeta.attention_source}` : ""}
+              {typeof candidateMeta.trending_hits === "number"
+                ? ` · trending overlap ${candidateMeta.trending_hits}/${candidateMeta.trending_listed ?? "?"}`
+                : ""}
+              {candidateMeta.attention_source ? ` · ${candidateMeta.attention_source.replaceAll("_", " ")}` : ""}
             </p>
           )}
           {candidateError && <p className="font-mono text-xs text-red-500">{candidateError}</p>}
           {candidateStatus === "loading" && (
-            <p className="font-mono text-xs text-graphite/40">Searching PubMed, iCite, and attention scores…</p>
+            <p className="font-mono text-xs text-graphite/40">Searching this week's NCI papers and PubMed Trending…</p>
           )}
           {candidateStatus === "ready" && candidates.length === 0 && (
-            <p className="font-mono text-xs text-graphite/40">No unused high-impact NCI papers in this window.</p>
+            <p className="font-mono text-xs text-graphite/40">No unused NCI papers in this week's window.</p>
           )}
 
           <div className="space-y-4">
@@ -395,7 +400,11 @@ function CandidateCard({ candidate, selected, onUse }) {
     <div className={`border rounded p-4 space-y-3 ${selected ? "border-cobalt" : "border-graphite/15"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[10px] tracking-widest uppercase text-cobalt">
-          {candidate.lane === "rcr" ? "Citation lane" : "Attention lane"}
+          {candidate.lane === "rcr"
+            ? "Citation lane"
+            : candidate.lane === "trending"
+              ? "PubMed trending"
+              : "This week's NCI"}
         </span>
         {candidate.journal && (
           <span className="font-mono text-[10px] tracking-widest uppercase text-graphite/40">
@@ -418,9 +427,9 @@ function CandidateCard({ candidate, selected, onUse }) {
             {output.type}
           </span>
         ))}
-        {typeof candidate.attention_score === "number" && candidate.attention_score > 0 && (
+        {typeof candidate.trending_rank === "number" && (
           <span className="font-mono text-[10px] text-graphite/35">
-            {candidate.attention_source === "altmetric" ? "Altmetric" : "Attention"} {Number(candidate.attention_score).toFixed(1)}
+            Trending #{candidate.trending_rank}
           </span>
         )}
         {typeof candidate.rcr === "number" && (
@@ -452,14 +461,14 @@ function CandidateCard({ candidate, selected, onUse }) {
             DOI
           </a>
         )}
-        {candidate.altmetric?.details_url && (
+        {candidate.trending_rank && (
           <a
-            href={candidate.altmetric.details_url}
+            href={candidate.trending_url || "https://pubmed.ncbi.nlm.nih.gov/trending/"}
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-[11px] uppercase tracking-widest text-graphite/45 hover:text-cobalt"
           >
-            Altmetric
+            Trending
           </a>
         )}
       </div>

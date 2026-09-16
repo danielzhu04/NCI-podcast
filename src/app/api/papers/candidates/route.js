@@ -10,7 +10,7 @@ export async function GET(request) {
   }
 
   const { searchParams } = new URL(request.url)
-  const window = searchParams.get("window") || "90d"
+  const window = searchParams.get("window") || "7d"
   const limit = Number(searchParams.get("limit") || 10)
 
   try {

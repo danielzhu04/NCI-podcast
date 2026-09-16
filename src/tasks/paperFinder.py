@@ -1,7 +1,8 @@
-"""Find high-impact NCI-supported papers for NCI Signal.
+"""Find this week's NCI-supported papers for NCI Signal.
 
-Lane A: recent papers ranked by attention (Altmetric, with citation fallback).
-Lane B: older NCI-supported papers with iCite RCR >= 2.
+Default: last 7 days of NCI-supported papers, filtered to PubMed Trending
+and ranked by trending order. Altmetric and older-paper / iCite-RCR search
+are parked (USE_ALTMETRIC / SEARCH_OLDER_PAPERS).
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from datetime import date, datetime
 from typing import Any
 
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+PUBMED_TRENDING_URL = "https://pubmed.ncbi.nlm.nih.gov/trending/"
 ICITE_URL = "https://icite.od.nih.gov/api/pubs"
 OPENALEX_URL = "https://api.openalex.org/works"
 MANIFEST_URL = (
@@ -65,6 +67,23 @@ OUTPUT_PATTERNS = [
 RCR_THRESHOLD = 2.0
 RECENT_DAYS = 365
 ALTMETRIC_PAUSE_S = 0.2 if ALTMETRIC_API_KEY else 0.35
+TRENDING_LIST_SIZE = 1000
+
+SAVED_SEARCH_RE = re.compile(
+    r'id="saved-search-term"[^>]*>([^<]+)</textarea>',
+    re.I | re.S,
+)
+DISPLAYED_UIDS_RE = re.compile(
+    r'name="log_displayeduids"\s+content="([^"]+)"',
+    re.I,
+)
+ARTICLE_ID_RE = re.compile(r'data-article-id="(\d+)"')
+
+# 5-year iCite RCR lane for older "highly cited" papers.
+SEARCH_OLDER_PAPERS = False
+# Altmetric Details Page scores. Replaced by PubMed Trending as the attention filter.
+USE_ALTMETRIC = False
+DEFAULT_WINDOW = "7d"
 
 
 def _http_get(url: str, timeout: int = 30) -> bytes:
@@ -103,12 +122,12 @@ def _ncbi_pause() -> None:
 
 
 def parse_window(window: str | None) -> int:
-    # Turn "90d" into a day count for PubMed's date filter.
-    raw = (window or "90d").strip().lower()
+    # Turn "7d" into a day count for PubMed's date filter. Default is one week.
+    raw = (window or DEFAULT_WINDOW).strip().lower()
     match = re.fullmatch(r"(\d+)d", raw)
     if match:
-        return max(7, min(int(match.group(1)), 3650))
-    return 90
+        return max(1, min(int(match.group(1)), 3650))
+    return 7
 
 
 def normalize_grant(grant_id: str) -> str | None:
@@ -187,6 +206,38 @@ def find_outputs(text: str) -> list[dict[str, str]]:
                 "url": url_tmpl.format(id=raw_id),
             })
     return found
+
+
+def _dedupe_pmids(ids: list[str]) -> list[str]:
+    # Keep first-seen order. Trending rank is the list index.
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for pmid in ids:
+        if pmid and pmid not in seen:
+            seen.add(pmid)
+            ordered.append(pmid)
+    return ordered
+
+
+def fetch_pubmed_trending_pmids() -> list[str]:
+    # PubMed Trending has no JSON API. The HTML stores ~1000 PMIDs, hottest first,
+    # in the saved-search-term box. This is NLM-wide activity, not NCI-specific.
+    try:
+        html = _http_get(PUBMED_TRENDING_URL, timeout=45).decode("utf-8", errors="replace")
+    except (urllib.error.URLError, TimeoutError):
+        return []
+
+    ids: list[str] = []
+    match = SAVED_SEARCH_RE.search(html)
+    if match:
+        ids = [part.strip() for part in re.split(r"[,\s]+", match.group(1)) if part.strip().isdigit()]
+    if not ids:
+        match = DISPLAYED_UIDS_RE.search(html)
+        if match:
+            ids = [part.strip() for part in match.group(1).split(",") if part.strip().isdigit()]
+    if not ids:
+        ids = ARTICLE_ID_RE.findall(html)
+    return _dedupe_pmids(ids)[:TRENDING_LIST_SIZE]
 
 
 def pubmed_search(term: str, retmax: int = 100) -> list[str]:
@@ -357,6 +408,7 @@ def _altmetric_get(path: str) -> dict[str, Any] | None:
 
 
 def altmetric_enrich(papers: list[dict[str, Any]]) -> str:
+    # Parked: USE_ALTMETRIC is False. PubMed Trending is the attention filter now.
     # Pull Altmetric Attention Scores for cutting-edge ranking. Returns the source actually used.
     got_any = False
     blocked = False
@@ -446,17 +498,22 @@ def _is_nci_paper(paper: dict[str, Any]) -> bool:
 
 
 def _score(paper: dict[str, Any]) -> float:
-    # Rank a paper by attention first, then RCR and shared outputs. Journal is a tiny bonus, not a gate.
+    # Rank by PubMed Trending (lower rank = hotter), then shared outputs. Journal is a small bonus.
     score = 0.0
-    attention = paper.get("attention_score")
-    if isinstance(attention, (int, float)):
-        score += min(float(attention), 250.0) * 2.0
-    rcr = paper.get("rcr")
-    if isinstance(rcr, (int, float)):
-        score += min(float(rcr), 10.0) * 4
+    rank = paper.get("trending_rank")
+    if isinstance(rank, int) and rank > 0:
+        score += max(0, TRENDING_LIST_SIZE + 1 - rank) * 2.0
+    else:
+        attention = paper.get("attention_score")
+        if isinstance(attention, (int, float)):
+            score += min(float(attention), 250.0) * 2.0
     score += 15 * len(paper.get("outputs") or [])
     if paper.get("whitelist_journal"):
         score += 8
+    # Older-paper ranking (unused while SEARCH_OLDER_PAPERS is False):
+    # rcr = paper.get("rcr")
+    # if isinstance(rcr, (int, float)):
+    #     score += min(float(rcr), 10.0) * 4
     return score
 
 
@@ -473,9 +530,14 @@ def _to_candidate(paper: dict[str, Any]) -> dict[str, Any]:
         oa_pdf_url = f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/pdf/"
 
     rcr = paper.get("rcr")
+    rank = paper.get("trending_rank")
     attention = paper.get("attention_score")
     source = paper.get("attention_source") or "none"
-    if paper.get("lane") == "attention":
+    if isinstance(rank, int) and rank > 0:
+        reason = f"PubMed trending #{rank}"
+    elif paper.get("lane") == "weekly":
+        reason = "this week's NCI paper"
+    elif paper.get("lane") == "attention":
         if source == "altmetric" and isinstance(attention, (int, float)):
             reason = f"Altmetric {attention:.1f}"
         elif source == "citations" and isinstance(attention, (int, float)):
@@ -497,6 +559,8 @@ def _to_candidate(paper: dict[str, Any]) -> dict[str, Any]:
         "nci_grants": paper.get("nci_grants") or [],
         "lane": paper.get("lane"),
         "rcr": rcr,
+        "trending_rank": rank if isinstance(rank, int) else None,
+        "trending_url": PUBMED_TRENDING_URL,
         "attention_score": attention if isinstance(attention, (int, float)) else 0,
         "attention_source": source,
         "altmetric": paper.get("altmetric"),
@@ -504,6 +568,7 @@ def _to_candidate(paper: dict[str, Any]) -> dict[str, Any]:
         "impact": {
             "lane": paper.get("lane"),
             "rcr": rcr,
+            "trending_rank": rank if isinstance(rank, int) else None,
             "attention_score": attention if isinstance(attention, (int, float)) else None,
             "reason": reason,
         },
@@ -517,10 +582,12 @@ def _to_candidate(paper: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def find_candidates(window: str = "90d", limit: int = 10) -> dict[str, Any]:
-    # Orchestrate search → NCI filter → attention/RCR lanes → rank. Called by GET /api/papers/candidates.
+def find_candidates(window: str = DEFAULT_WINDOW, limit: int = 10) -> dict[str, Any]:
+    # Weekly NCI search → intersect PubMed Trending → rank by trending order.
     days = parse_window(window)
     used = existing_pmids()
+    trending_pmids = fetch_pubmed_trending_pmids()
+    trending_rank = {pmid: index + 1 for index, pmid in enumerate(trending_pmids)}
 
     recent_term = (
         f"(CA[gr] OR NCI[gr]) AND (\"last {days} days\"[PDat]) "
@@ -534,21 +601,27 @@ def find_candidates(window: str = "90d", limit: int = 10) -> dict[str, Any]:
     flagship_ids = [pmid for pmid in pubmed_search(flagship_term, retmax=80) if pmid not in used]
 
     lane_b_ids: list[str] = []
-    if len(recent_ids) + len(flagship_ids) < 8:
-        lane_b_term = (
-            f"(CA[gr] OR NCI[gr]) AND (\"last 5 years\"[PDat]) "
-            f"AND english[la] AND journal article[pt]"
-        )
-        lane_b_ids = [
-            pmid for pmid in pubmed_search(lane_b_term, retmax=150)
-            if pmid not in used and pmid not in recent_ids and pmid not in flagship_ids
-        ]
+    # --- older papers (iCite RCR lane) ---
+    # Parked: the weekly show only wants this week's literature.
+    # Set SEARCH_OLDER_PAPERS = True to restore the 5-year highly-cited backup search.
+    if SEARCH_OLDER_PAPERS:
+        if len(recent_ids) + len(flagship_ids) < 8:
+            lane_b_term = (
+                f"(CA[gr] OR NCI[gr]) AND (\"last 5 years\"[PDat]) "
+                f"AND english[la] AND journal article[pt]"
+            )
+            lane_b_ids = [
+                pmid for pmid in pubmed_search(lane_b_term, retmax=150)
+                if pmid not in used and pmid not in recent_ids and pmid not in flagship_ids
+            ]
 
     all_ids = list(dict.fromkeys(recent_ids + flagship_ids + lane_b_ids))
     papers = pubmed_efetch(all_ids)
     papers = [paper for paper in papers if _is_nci_paper(paper) and paper["pmid"] not in used]
 
-    icite = icite_enrich([paper["pmid"] for paper in papers])
+    icite: dict[str, dict[str, Any]] = {}
+    if SEARCH_OLDER_PAPERS:
+        icite = icite_enrich([paper["pmid"] for paper in papers])
     for paper in papers:
         row = icite.get(paper["pmid"]) or {}
         rcr = row.get("relative_citation_ratio")
@@ -560,36 +633,57 @@ def find_candidates(window: str = "90d", limit: int = 10) -> dict[str, Any]:
             paper.get("title") or "",
             paper.get("abstract") or "",
         ]))
+        rank = trending_rank.get(paper["pmid"])
+        paper["trending_rank"] = rank
+        paper["attention_source"] = "pubmed_trending" if rank else "none"
+        paper["attention_score"] = float(TRENDING_LIST_SIZE + 1 - rank) if rank else 0.0
+        paper["altmetric"] = None
 
-    attention_source = altmetric_enrich(papers)
+    # Parked: Altmetric Details Page scoring. Set USE_ALTMETRIC = True to restore.
+    if USE_ALTMETRIC:
+        altmetric_enrich(papers)
 
     for paper in papers:
         age = paper.get("age_days")
-        recent = age is not None and age <= RECENT_DAYS
-        if recent or age is None:
-            paper["lane"] = "attention"
-        elif paper.get("rcr") is not None and paper["rcr"] >= RCR_THRESHOLD:
+        in_window = age is None or age <= days
+        if in_window and paper.get("trending_rank"):
+            paper["lane"] = "trending"
+        elif in_window:
+            paper["lane"] = "weekly"
+        elif SEARCH_OLDER_PAPERS and paper.get("rcr") is not None and paper["rcr"] >= RCR_THRESHOLD:
             paper["lane"] = "rcr"
         else:
             paper["lane"] = None
 
-    kept = [paper for paper in papers if paper.get("lane")]
-    if not kept:
-        kept = papers
+    trending_kept = [paper for paper in papers if paper.get("lane") == "trending"]
+    if trending_kept:
+        kept = trending_kept
+        attention_source = "pubmed_trending"
+    else:
+        kept = [paper for paper in papers if paper.get("lane") in {"weekly", "trending", "rcr"}]
+        if not kept:
+            kept = papers
+        attention_source = "weekly_fallback" if kept else "none"
 
     openalex_enrich(kept)
-    kept.sort(key=_score, reverse=True)
+    kept.sort(key=lambda paper: (
+        paper.get("trending_rank") is None,
+        paper.get("trending_rank") or 10**9,
+        -_score(paper),
+    ))
     candidates = [_to_candidate(paper) for paper in kept[: max(1, min(int(limit or 10), 25))]]
 
     return {
         "window": f"{days}d",
         "queried": len(all_ids),
         "kept": len(kept),
+        "trending_listed": len(trending_pmids),
+        "trending_hits": len(trending_kept),
         "attention_source": attention_source,
         "candidates": candidates,
     }
 
 
 if __name__ == "__main__":
-    result = find_candidates(window=os.getenv("NCI_WINDOW", "90d"))
+    result = find_candidates(window=os.getenv("NCI_WINDOW", DEFAULT_WINDOW))
     print(json.dumps(result, indent=2))

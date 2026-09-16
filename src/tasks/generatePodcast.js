@@ -12,9 +12,10 @@ const PodcastJobInput = z.object({
   doi: z.string().optional().default(""),
   journal: z.string().optional().default(""),
   nci_grants: z.array(z.string()).optional().default([]),
-  impact: z.object({
+  impact: z.looseObject({
     lane: z.string().optional().nullable(),
     rcr: z.number().optional().nullable(),
+    trending_rank: z.number().optional().nullable(),
     reason: z.string().optional().nullable(),
   }).optional().default({}),
   outputs: z.array(z.object({

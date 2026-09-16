@@ -71,7 +71,7 @@ export default function HeroSection({ latestEpisode }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.2, delay: 0.15, ease }}
           >
-            High-Impact NCI-Supported Cancer Research
+            This Week in NCI-Supported Cancer Research
           </motion.h2>
           <motion.p
             className="text-base md:text-lg text-graphite/60 leading-relaxed max-w-md"
@@ -79,7 +79,7 @@ export default function HeroSection({ latestEpisode }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.3, ease }}
           >
-            Two AI hosts — Axiom and Trinity — decode high-impact papers supported by the National Cancer Institute, including the data, code, and tools those papers left behind.
+            Each week, Axiom and Trinity take the cancer paper that drew the most attention — NCI-supported work, plus the data, code, and tools it left behind.
           </motion.p>
           {latestEpisode && (
             <motion.div

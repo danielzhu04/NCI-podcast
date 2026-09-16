@@ -27,7 +27,7 @@ export default function Footer() {
 
             <h3 className="font-heading text-2xl font-semibold text-white">NCI Signal</h3>
             <p className="font-body text-sm text-white/50 leading-relaxed max-w-xs">
-              Each episode unpacks a high-impact paper supported by the National Cancer Institute — and the data, code, and tools that paper left behind. Built by the Ma'ayan Laboratory.
+              Each week we cover the NCI-supported cancer paper that drew the most attention — and the data, code, and tools it left behind. Built by the Ma'ayan Laboratory.
             </p>
             <div className="flex items-center gap-1">
               <span className="font-mono text-[10px] tracking-widest uppercase text-white/30">

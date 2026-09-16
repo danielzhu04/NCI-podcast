@@ -6,8 +6,12 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+import dotenv
+
 from .audioGenerator import generate_audio
 from .scriptGenerator import generate_script
+
+dotenv.load_dotenv()
 
 
 S3_BUCKET = os.getenv("S3_BUCKET", "axiom-podcasts")
@@ -32,12 +36,31 @@ def _manifest_remote() -> str:
     return f"{S3_REMOTE}:{S3_BUCKET}/{S3_PREFIX}/manifest.json"
 
 
-def _object_remote() -> str:
-    return f"{S3_REMOTE}:{S3_BUCKET}/{S3_PREFIX}"
+def _mp3_remote(filename: str) -> str:
+    # Full object key. rclone copy to the prefix fails if "nci-signal" already exists as a file.
+    return f"{S3_REMOTE}:{S3_BUCKET}/{S3_PREFIX}/{filename}"
 
 
 def _public_url(filename: str) -> str:
     return f"{S3_PUBLIC_BASE}/{S3_PREFIX}/{filename}"
+
+
+def _rclone(*args: str) -> subprocess.CompletedProcess[str]:
+    # Lab Ceph often returns 403 on HeadObject/ListBuckets. Skip those probes.
+    env = os.environ.copy()
+    env.pop("RCLONE_CONFIG_MAAYANLAB_ACL", None)
+    return subprocess.run(
+        [
+            "rclone",
+            "--s3-no-check-bucket",
+            "--s3-no-head",
+            "--no-check-dest",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
 
 
 def loadManifest() -> list:
@@ -46,11 +69,7 @@ def loadManifest() -> list:
     A missing prefix/manifest starts a new catalog instead of failing.
     """
     local_manifest = Path("/tmp/nci-signal-manifest.json")
-    result = subprocess.run(
-        ["rclone", "copyto", _manifest_remote(), str(local_manifest)],
-        capture_output=True,
-        text=True,
-    )
+    result = _rclone("copyto", _manifest_remote(), str(local_manifest))
     if result.returncode != 0 or not local_manifest.exists():
         return []
     with open(local_manifest, "r") as f:
@@ -65,11 +84,7 @@ def saveManifest(manifest: list):
     local_manifest = Path("/tmp/nci-signal-manifest.json")
     with open(local_manifest, "w") as f:
         json.dump(manifest, f, indent=2)
-    result = subprocess.run(
-        ["rclone", "copyto", str(local_manifest), _manifest_remote()],
-        capture_output=True,
-        text=True,
-    )
+    result = _rclone("copyto", str(local_manifest), _manifest_remote())
     if result.returncode != 0:
         raise RuntimeError("s3 manifest upload failed: " + result.stderr)
 
@@ -105,6 +120,58 @@ def publishEpisode(episode_id: str, title: str = None, description: str = None, 
 
     saveManifest(manifest)
     return episode
+
+
+def upload_local_episode(
+    mp3_path: str,
+    paper_title: str = "",
+    description: str = "",
+    tags: Optional[list] = None,
+    publication_url: str = "",
+    tool_url: str = "",
+    image_url: str = "",
+    pmid: str = "",
+    doi: str = "",
+    journal: str = "",
+    nci_grants: Optional[list] = None,
+    impact: Optional[dict] = None,
+    outputs: Optional[list] = None,
+) -> str:
+    """Upload an already-generated MP3 and append an unpublished episode. Skips script/TTS."""
+    local_mp3 = Path(mp3_path)
+    if not local_mp3.is_file():
+        raise FileNotFoundError(f"MP3 not found: {local_mp3}")
+
+    paper_title = paper_title or local_mp3.stem.replace("_", " ")
+    filename = f"{titleFix(paper_title)}.mp3"
+    result_upload = _rclone("copyto", str(local_mp3), _mp3_remote(filename))
+    if result_upload.returncode != 0:
+        raise RuntimeError("s3 upload failed: " + (result_upload.stderr or result_upload.stdout))
+
+    podcast_url = _public_url(filename)
+    episode_entry = {
+        "id": f"pmid-{pmid}-podcast" if pmid else f"{titleFix(paper_title)}-podcast",
+        "title": paper_title,
+        "paper_title": paper_title,
+        "description": description,
+        "hosts": "Axiom & Trinity",
+        "publish_date": date.today().isoformat(),
+        "duration": None,
+        "recording_url": podcast_url,
+        "publication_url": publication_url,
+        "tool_url": tool_url,
+        "image_url": image_url,
+        "tags": tags or [],
+        "published": False,
+        "pmid": pmid or "",
+        "doi": doi or "",
+        "journal": journal or "",
+        "nci_grants": nci_grants or [],
+        "impact": impact or {},
+        "outputs": outputs or [],
+    }
+    addEpisode(episode_entry)
+    return podcast_url
 
 
 def generate(
@@ -147,11 +214,7 @@ def generate(
 
     generate_audio(script_text, mp3_file_path, intro_path, outro_path)
 
-    result_upload = subprocess.run(
-        ["rclone", "copy", mp3_file_path, _object_remote()],
-        capture_output=True,
-        text=True,
-    )
+    result_upload = _rclone("copyto", str(mp3_file_path), _mp3_remote(filename))
 
     if result_upload.returncode != 0:
         raise RuntimeError("s3 upload failed: " + result_upload.stderr)

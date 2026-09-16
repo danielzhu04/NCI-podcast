@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "NCI Signal — High-impact NCI-supported papers",
-  description: "AI-generated podcast episodes that unpack high-impact National Cancer Institute-supported papers and the data, code, and tools they leave behind.",
+  title: "NCI Signal — This week in NCI-supported cancer research",
+  description: "A weekly AI podcast on the NCI-supported cancer paper that drew the most PubMed attention, plus the data, code, and tools it left behind.",
   icons: {
     icon: 'https://s3.k8s.maayanlab.cloud/axiom-podcasts/favicon.png',
   },
