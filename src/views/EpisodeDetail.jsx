@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink, FileText, Headphones, Play, Calendar, Clock, U
 import { motion } from "framer-motion";
 import moment from "moment";
 import Footer from "@/components/podcast/Footer";
+import PodcastVisualizer from "@/components/podcast/PodcastVisualizer";
 
 const ease = [0.16, 1, 0.3, 1];
 
@@ -12,6 +13,7 @@ export default function EpisodeDetail() {
   const { id } = useParams();
   const [episode, setEpisode] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [audioEl, setAudioEl] = useState(null);
 
   useEffect(() => {
     episodeAPI.get(id)
@@ -94,7 +96,7 @@ export default function EpisodeDetail() {
           </p>
         </motion.div>
 
-        {episode.image_url && (
+        {!episode.recording_url && episode.image_url && (
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
@@ -110,7 +112,7 @@ export default function EpisodeDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3, ease }}
-            className="mt-10 p-6 bg-white rounded-xl border border-graphite/8 shadow-sm"
+            className="mt-12 p-6 bg-white rounded-xl border border-graphite/8 shadow-sm"
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 bg-cobalt rounded-full flex items-center justify-center">
@@ -118,10 +120,23 @@ export default function EpisodeDetail() {
               </div>
               <p className="font-mono text-[11px] tracking-widest uppercase text-graphite/50">Podcast Recording</p>
             </div>
-            <audio controls className="w-full" preload="metadata">
-              <source src={episode.recording_url} />
+            <audio
+              ref={setAudioEl}
+              controls
+              className="w-full"
+              preload="metadata"
+              crossOrigin="anonymous"
+              src={episode.recording_url}
+            >
               Your browser does not support the audio element.
             </audio>
+            <div className="mt-5">
+              <PodcastVisualizer
+                audioEl={audioEl}
+                backgroundUrl={episode.image_url}
+                title={episode.title}
+              />
+            </div>
           </motion.div>
         )}
 

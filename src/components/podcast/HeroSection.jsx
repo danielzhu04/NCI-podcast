@@ -67,11 +67,11 @@ export default function HeroSection({ latestEpisode }) {
           </motion.p>
           <motion.h2
             className="font-heading text-4xl md:text-6xl lg:text-7xl font-bold text-graphite leading-[1.3] italic"
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 30 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.2, delay: 0.15, ease }}
           >
-            This Week in NCI-Supported Cancer Research
+            Cancer Research Breakthroughs Supported by NCI 
           </motion.h2>
           <motion.p
             className="text-base md:text-lg text-graphite/60 leading-relaxed max-w-md"
