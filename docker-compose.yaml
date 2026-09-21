@@ -1,9 +1,9 @@
 services:
-  genomelens-app:
+  nci-signal-app:
     build:
       context: .
       dockerfile: Dockerfile.app
-    image: jacobhadley/genomelens-app:0.1.2
+    image: danielzhu04/nci-signal-app:0.1.0
     platform: linux/amd64
     pull_policy: if_not_present
     ports:
@@ -12,7 +12,7 @@ services:
       annotations:
         maayanlab.cloud/ingress: ${PROD_NEXT_PUBLIC_URL}
     environment:
-    - DATABASE_URL=${PROD_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD}@genomelens-postgres:5432/postgres}
+    - DATABASE_URL=${PROD_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD}@nci-signal-postgres:5432/postgres}
     - ADMIN_PASSWORD
     - ADMIN_SESSION_SECRET
     - OPENAI_API_KEY
@@ -22,16 +22,21 @@ services:
     - RCLONE_CONFIG_MAAYANLAB_SECRET_ACCESS_KEY
     - RCLONE_CONFIG_MAAYANLAB_ENDPOINT
     - RCLONE_CONFIG_MAAYANLAB_ACL
+    - S3_BUCKET
+    - S3_REMOTE
+    - S3_PREFIX
+    - S3_PUBLIC_BASE
+    - NCI_SCRIPT_PROMPT
 
-  genomelens-worker:
+  nci-signal-worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    image: jacobhadley/genomelens-worker:0.1.4
+    image: danielzhu04/nci-signal-worker:0.1.0
     platform: linux/amd64
     pull_policy: if_not_present
     environment:
-    - DATABASE_URL=${PROD_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD}@genomelens-postgres:5432/postgres}
+    - DATABASE_URL=${PROD_DATABASE_URL:-postgres://postgres:${POSTGRES_PASSWORD}@nci-signal-postgres:5432/postgres}
     - OPENAI_API_KEY
     - RCLONE_CONFIG_MAAYANLAB_TYPE=s3
     - RCLONE_CONFIG_MAAYANLAB_PROVIDER
@@ -39,8 +44,13 @@ services:
     - RCLONE_CONFIG_MAAYANLAB_SECRET_ACCESS_KEY
     - RCLONE_CONFIG_MAAYANLAB_ENDPOINT
     - RCLONE_CONFIG_MAAYANLAB_ACL
+    - S3_BUCKET
+    - S3_REMOTE
+    - S3_PREFIX
+    - S3_PUBLIC_BASE
+    - NCI_SCRIPT_PROMPT
 
-  genomelens-postgres:
+  nci-signal-postgres:
     image: postgres:17
     pull_policy: missing
     restart: unless-stopped
@@ -49,15 +59,15 @@ services:
     ports:
     - 5432:5432
     volumes:
-    - genomelens-postgres-data:/var/lib/postgresql/data
+    - nci-signal-postgres-data:/var/lib/postgresql/data
 
 volumes:
-  genomelens-postgres-data:
+  nci-signal-postgres-data:
     x-kubernetes:
       size: 10Gi
       class: ceph-block-no-replicas
 
 x-kubernetes:
-  context: jacobhadley@sshkube
-  name: genomelens
-  namespace: jacobhadley
+  context: danielzhu04@sshkube
+  name: nci-signal
+  namespace: danielzhu04

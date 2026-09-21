@@ -27,7 +27,10 @@ export default function Archive() {
       ep.title?.toLowerCase().includes(q) ||
       ep.paper_title?.toLowerCase().includes(q) ||
       ep.description?.toLowerCase().includes(q) ||
-      ep.tags?.some((t) => t.toLowerCase().includes(q))
+      ep.tags?.some((t) => t.toLowerCase().includes(q)) ||
+      ep.journal?.toLowerCase().includes(q) ||
+      ep.pmid?.toLowerCase().includes(q) ||
+      ep.nci_grants?.some((g) => g.toLowerCase().includes(q))
     );
   });
 
@@ -41,7 +44,7 @@ export default function Archive() {
           <ArrowLeft className="w-3 h-3" /> Home
         </Link>
         <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-graphite/30">
-          Genome Lens
+          NCI Signal
         </p>
       </div>
 

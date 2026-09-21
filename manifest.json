@@ -1,0 +1,193 @@
+[
+  {
+    "id": "Appyters_Turning_Jupyter_Notebooks_into_datadriven_web_apps-podcast",
+    "title": "Appyters: Turning Jupyter Notebooks into data-driven web apps",
+    "paper_title": "Appyters: Turning Jupyter Notebooks into data-driven web apps",
+    "description": "This paper introduces Appyters, a framework that turns Jupyter Notebooks into easy-to-use web applications for data analysis. The authors show how Appyters help biologists upload data, choose options, and receive reproducible reports without needing to write code.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-07-21",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/Appyters_Turning_Jupyter_Notebooks_into_datadriven_web_apps.mp3",
+    "publication_url": "https://www.cell.com/patterns/fulltext/S2666-3899(21)00023-4?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS2666389921000234%3Fshowall%3Dtrue",
+    "tool_url": "https://appyters.maayanlab.cloud/#/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/appyters.png",
+    "tags": [
+      "bioinformatics",
+      "jupyter notebooks",
+      "web apps",
+      "reproducibility",
+      "omics"
+    ],
+    "episode_number": 9
+  },
+  {
+    "id": "sc2DAT_Workflow_for_Targeting_Tumor_Subpopulations_of_Single_Cells-podcast",
+    "title": "sc2DAT: Workflow for Targeting Tumor Subpopulations of Single Cells",
+    "paper_title": "sc2DAT: Workflow for Targeting Tumor Subpopulations of Single Cells",
+    "description": "Axiom and Trinity explore sc2DAT \u2014 a web-based workflow that integrates single-cell and bulk RNA-seq data to identify cell-type-specific therapeutic targets and compounds for precision cancer treatment.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-07-13",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/sc2DAT_Workflow_for_Targeting_Tumor_Subpopulations_of_Single_Cells.mp3",
+    "publication_url": "https://academic.oup.com/bioinformaticsadvances/article/5/1/vbaf237/8266336",
+    "tool_url": "https://sc2dat.maayanlab.cloud/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/cfde.png",
+    "tags": [
+      "single-cell RNA-seq",
+      "cancer",
+      "drug discovery",
+      "target identification",
+      "precision medicine",
+      "transcriptomics"
+    ],
+    "episode_number": 8
+  },
+  {
+    "id": "multiomics2targets-podcast",
+    "episode_number": 7,
+    "title": "MultiOmics2Targets: Personalized Cancer Target Identification",
+    "paper_title": "Multiomics2Targets identifies targets from cancer cohorts profiled with transcriptomics, proteomics, and phosphoproteomics",
+    "description": "Axiom and Trinity explore MultiOmics2Targets \u2014 a platform for integrative analysis of transcriptomics, proteomics, and phosphoproteomics data to identify and prioritize therapeutic targets from cancer patient cohorts.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-07-01",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/multiomics_podcast.mp3",
+    "publication_url": "https://www.cell.com/cell-reports-methods/fulltext/S2667-2375(24)00212-1?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS2667237524002121%3Fshowall%3Dtrue",
+    "tool_url": "https://multiomics2targets.maayanlab.cloud/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/multiomics.png",
+    "tags": [
+      "multiomics",
+      "cancer",
+      "proteomics",
+      "transcriptomics",
+      "target identification",
+      "CPTAC"
+    ]
+  },
+  {
+    "id": "harmonizome3-podcast",
+    "episode_number": 6,
+    "title": "Harmonizome 3.0: Unified Gene and Protein Knowledge",
+    "paper_title": "Harmonizome 3.0: integrated knowledge about genes and proteins from diverse multi-omics resources",
+    "description": "Axiom and Trinity break down Harmonizome 3.0 \u2014 a major upgrade to the Harmonizome database that integrates nearly 12 million gene-attribute associations from diverse omics resources, with new AI-ready formats and LLM-powered dataset comparisons.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-06-30",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/harmonizome_podcast.mp3",
+    "publication_url": "https://doi.org/10.1093/nar/gkae1080",
+    "tool_url": "https://maayanlab.cloud/Harmonizome/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/harmonizome.png",
+    "tags": [
+      "harmonizome",
+      "gene attributes",
+      "multi-omics",
+      "knowledge graph",
+      "UMAP",
+      "LLM"
+    ]
+  },
+  {
+    "id": "rummageo-podcast",
+    "episode_number": 5,
+    "title": "RummaGEO: Mining Gene Sets from GEO at Scale",
+    "paper_title": "RummaGEO: Automatic Mining of Human and Mouse Gene Sets from GEO",
+    "description": "Axiom and Trinity explore RummaGEO \u2014 a search engine that automatically mines over 293,000 human and mouse gene sets from RNA-seq studies in GEO, enabling global gene expression signature search across tens of thousands of studies.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-06-30",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/rummaGEO_podcast.mp3",
+    "publication_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11030343/",
+    "tool_url": "https://rummageo.com/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/rummaGEO.png",
+    "tags": [
+      "GEO",
+      "gene sets",
+      "RNA-seq",
+      "differential expression",
+      "gene expression",
+      "ARCHS4"
+    ]
+  },
+  {
+    "id": "rummagene-podcast",
+    "episode_number": 4,
+    "title": "Rummagene: Surfacing Buried Gene Sets from Publications",
+    "paper_title": "Rummagene: massive mining of gene sets from supporting materials of biomedical research publications",
+    "description": "Axiom and Trinity explore Rummagene \u2014 a server that crawls PubMed Central to extract and serve hundreds of thousands of gene sets buried in supplementary materials, enabling enrichment analysis and gene function prediction at massive scale.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-06-30",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/rummagene_podcast.mp3",
+    "publication_url": "https://www.nature.com/articles/s42003-024-06177-7#Sec11",
+    "tool_url": "https://rummagene.com",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/rummagene.png",
+    "tags": [
+      "gene sets",
+      "PubMed",
+      "enrichment analysis",
+      "text mining",
+      "transcription factors"
+    ]
+  },
+  {
+    "id": "pwb-podcast",
+    "episode_number": 3,
+    "title": "Playbook Workflow Builder: Bioinformatics Without Code",
+    "paper_title": "Playbook Workflow Builder: Interactive Construction of Bioinformatics Workflows",
+    "description": "Axiom and Trinity explore the Playbook Workflow Builder (PWB) \u2014 a web-based platform for dynamically constructing and executing bioinformatics workflows without programming expertise.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-06-30",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/pwb_podcast.mp3",
+    "publication_url": "https://doi.org/10.1371/journal.pcbi.1012901",
+    "tool_url": "https://playbook-workflow-builder.cloud/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/pwb.png",
+    "tags": [
+      "bioinformatics",
+      "workflows",
+      "knowledge graph",
+      "LLM",
+      "NIH Common Fund"
+    ]
+  },
+  {
+    "id": "chea-podcast-2",
+    "episode_number": 2,
+    "title": "ChEA-KG: Transcription Factor Regulatory Networks",
+    "paper_title": "ChEA-KG: Human Transcription Factor Regulatory Network with a Knowledge Graph Interactive User Interface",
+    "description": "Axiom and Trinity break down ChEA-KG \u2014 a knowledge graph-based resource for exploring human transcription factor regulatory networks through an interactive user interface.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-06-23",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/ChEA_podcast_2.mp3",
+    "publication_url": "https://academic.oup.com/nar/advance-article/doi/10.1093/nar/gkag508/8688738",
+    "tool_url": "https://chea-kg.maayanlab.cloud/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/chea.png",
+    "tags": [
+      "transcription factors",
+      "knowledge graph",
+      "gene regulation",
+      "ChEA"
+    ]
+  },
+  {
+    "id": "gsfm-podcast",
+    "episode_number": 1,
+    "title": "GSFM: Gene Set Feature Matrix",
+    "paper_title": "GPT-based Gene Set Feature Matrix for biological pathway analysis",
+    "description": "Axiom and Trinity explore GSFM \u2014 a GPT-powered approach to encoding gene sets as feature matrices for downstream machine learning in pathway analysis.",
+    "hosts": "Axiom & Trinity",
+    "publish_date": "2026-06-22",
+    "duration": null,
+    "recording_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/gpt_GSFM_podcast_3.mp3",
+    "publication_url": "https://www.cell.com/patterns/fulltext/S2666-3899(26)00074-7",
+    "tool_url": "https://gsfm.maayanlab.cloud/",
+    "image_url": "https://s3.k8s.maayanlab.cloud/axiom-podcasts/gsfm.png",
+    "tags": [
+      "GPT",
+      "gene sets",
+      "machine learning",
+      "pathway analysis"
+    ]
+  }
+]
